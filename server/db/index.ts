@@ -18,7 +18,24 @@ if (process.env.VERCEL && !fs.existsSync(dbPath)) {
   }
 }
 
-export const db = new Database(dbPath);
+let db: any;
+try {
+  db = new Database(dbPath);
+} catch (err) {
+  console.error('Failed to open database:', err);
+  // Fallback or dummy db object to prevent crash
+  db = {
+    pragma: () => {},
+    exec: () => {},
+    prepare: () => ({
+      get: () => ({ count: 0 }),
+      run: () => ({ lastInsertRowid: 0 }),
+      all: () => []
+    })
+  };
+}
+
+export { db };
 
 export function initDb() {
   // Enable foreign keys

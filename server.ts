@@ -6,6 +6,19 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import fs from 'fs';
 
+// Routes
+import { authRoutes } from './server/routes/auth.js';
+import { productRoutes } from './server/routes/products.js';
+import { supplierRoutes } from './server/routes/suppliers.js';
+import { customerRoutes } from './server/routes/customers.js';
+import { purchaseRoutes } from './server/routes/purchases.js';
+import { salesRoutes } from './server/routes/sales.js';
+import { productionRoutes } from './server/routes/production.js';
+import { dashboardRoutes } from './server/routes/dashboard.js';
+import { reportRoutes } from './server/routes/reports.js';
+import { dataRoutes } from './server/routes/data.js';
+import { initDb } from './server/db/index.js';
+
 // Load environment variables
 dotenv.config();
 
@@ -13,7 +26,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -27,21 +40,13 @@ if (!fs.existsSync(uploadsDir)) {
 app.use('/uploads', express.static(uploadsDir));
 
 // --- Database Initialization ---
-const { initDb } = await import('./server/db/index.js');
-initDb();
+try {
+  initDb();
+} catch (err) {
+  console.error('Database init failed:', err);
+}
 
 // --- API Routes ---
-const { authRoutes } = await import('./server/routes/auth.js');
-const { productRoutes } = await import('./server/routes/products.js');
-const { supplierRoutes } = await import('./server/routes/suppliers.js');
-const { customerRoutes } = await import('./server/routes/customers.js');
-const { purchaseRoutes } = await import('./server/routes/purchases.js');
-const { salesRoutes } = await import('./server/routes/sales.js');
-const { productionRoutes } = await import('./server/routes/production.js');
-const { dashboardRoutes } = await import('./server/routes/dashboard.js');
-const { reportRoutes } = await import('./server/routes/reports.js');
-const { dataRoutes } = await import('./server/routes/data.js');
-
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/suppliers', supplierRoutes);
@@ -60,12 +65,18 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
     appType: 'spa',
   });
   app.use(vite.middlewares);
-} else {
-  // Serve static files in production
-  app.use(express.static(path.join(__dirname, 'dist')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-  });
+} else if (!process.env.VERCEL) {
+  // Serve static files in production (only if NOT on Vercel)
+  const distPath = path.join(__dirname, 'dist');
+  if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ message: 'API route not found' });
+      }
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
 }
 
 // Only listen if not running as a serverless function
