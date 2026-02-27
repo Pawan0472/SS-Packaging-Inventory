@@ -8,13 +8,18 @@ const __dirname = path.dirname(__filename);
 
 const dbPath = process.env.VERCEL 
   ? path.join('/tmp', 'erp.db')
-  : path.join(__dirname, '../../erp.db');
+  : path.join(process.cwd(), 'erp.db');
 
 // If on Vercel and db doesn't exist in /tmp, copy it from the project root if it exists
 if (process.env.VERCEL && !fs.existsSync(dbPath)) {
-  const sourcePath = path.join(__dirname, '../../erp.db');
+  const sourcePath = path.join(process.cwd(), 'erp.db');
   if (fs.existsSync(sourcePath)) {
-    fs.copyFileSync(sourcePath, dbPath);
+    try {
+      fs.copyFileSync(sourcePath, dbPath);
+      console.log('Database copied to /tmp');
+    } catch (err) {
+      console.error('Failed to copy database:', err);
+    }
   }
 }
 
