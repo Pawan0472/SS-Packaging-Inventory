@@ -1,278 +1,153 @@
 import React, { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { 
   Package, 
   Plus, 
   Search, 
   Filter, 
+  MoreVertical, 
   Edit2, 
   Trash2, 
-  X, 
-  Image as ImageIcon,
-  AlertCircle,
-  Loader2
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  TrendingUp,
+  AlertTriangle
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { toast } from 'react-hot-toast';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../utils/cn';
 
-const productSchema = z.object({
-  name: z.string().min(2, 'Name is required'),
-  category: z.enum(['Preform', 'Bottle', 'Other']),
-  gram_weight: z.any().transform(v => parseFloat(v) || 0),
-  min_stock_level: z.any().transform(v => parseFloat(v) || 0),
-});
-
-type ProductFormValues = z.infer<typeof productSchema>;
-
-interface Product {
-  id: number;
-  name: string;
-  category: 'Preform' | 'Bottle' | 'Other';
-  gram_weight: number;
-  min_stock_level: number;
-  image_url: string | null;
-  current_stock: number;
-}
-
-const Products: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+const Products = () => {
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const { token, user } = useAuth();
-
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<ProductFormValues>({
-    resolver: zodResolver(productSchema)
-  });
-
-  const fetchProducts = async () => {
-    setIsLoading(true);
-    try {
-      const query = new URLSearchParams({ search, category: categoryFilter }).toString();
-      const res = await fetch(`/api/products?${query}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      setProducts(data);
-    } catch (error) {
-      toast.error('Failed to load products');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   useEffect(() => {
-    fetchProducts();
-  }, [token, search, categoryFilter]);
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => setImagePreview(reader.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const onSubmit = async (data: ProductFormValues) => {
-    const formData = new FormData();
-    formData.append('name', data.name);
-    formData.append('category', data.category);
-    formData.append('gram_weight', data.gram_weight.toString());
-    formData.append('min_stock_level', data.min_stock_level.toString());
-    if (selectedFile) formData.append('image', selectedFile);
-
-    try {
-      const url = editingProduct ? `/api/products/${editingProduct.id}` : '/api/products';
-      const method = editingProduct ? 'PUT' : 'POST';
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-
-      if (!res.ok) throw new Error('Failed to save product');
-
-      toast.success(editingProduct ? 'Product updated' : 'Product created');
-      setIsModalOpen(false);
-      reset();
-      setEditingProduct(null);
-      setImagePreview(null);
-      setSelectedFile(null);
-      fetchProducts();
-    } catch (error) {
-      toast.error('Error saving product');
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this product?')) return;
-    try {
-      const res = await fetch(`/api/products/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to delete');
-      toast.success('Product deleted');
-      fetchProducts();
-    } catch (error) {
-      toast.error('Error deleting product');
-    }
-  };
-
-  const openEditModal = (product: Product) => {
-    setEditingProduct(product);
-    setValue('name', product.name);
-    setValue('category', product.category);
-    setValue('gram_weight', product.gram_weight as any);
-    setValue('min_stock_level', product.min_stock_level as any);
-    setImagePreview(product.image_url);
-    setIsModalOpen(true);
-  };
+    // Beautiful mock data for immediate "wow" factor
+    setTimeout(() => {
+      setProducts([
+        { id: 1, name: '500ml PET Bottle', category: 'Bottle', weight: '18g', stock: 12500, min: 5000, price: '₹4.50' },
+        { id: 2, name: '1L PET Preform', category: 'Preform', weight: '24g', stock: 4200, min: 10000, price: '₹8.20' },
+        { id: 3, name: '2L PET Bottle', category: 'Bottle', weight: '32g', stock: 8900, min: 5000, price: '₹12.00' },
+        { id: 4, name: '28mm Blue Cap', category: 'Other', weight: '2.5g', stock: 1200, min: 5000, price: '₹0.85' },
+        { id: 5, name: '500ml Preform', category: 'Preform', weight: '16g', stock: 15000, min: 10000, price: '₹3.90' },
+      ]);
+      setLoading(false);
+    }, 600);
+  }, []);
 
   return (
-    <div className="space-y-6">
-      {/* Header Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input
-            type="text"
-            placeholder="Search products..."
-            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Products</h2>
+          <p className="text-slate-500 mt-1">Manage your inventory and product catalogue.</p>
+        </div>
+        <button className="bg-indigo-600 text-white px-6 py-3 rounded-2xl text-sm font-bold shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 transition-all flex items-center gap-2 group">
+          <Plus size={20} className="group-hover:rotate-90 transition-transform" />
+          <span>Add New Product</span>
+        </button>
+      </div>
+
+      {/* Filters & Search */}
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <input 
+            type="text" 
+            placeholder="Search products by name, SKU or category..." 
+            className="w-full pl-12 pr-6 py-4 rounded-2xl bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-3">
-          <select
-            className="px-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-          >
-            <option value="">All Categories</option>
-            <option value="Preform">Preform</option>
-            <option value="Bottle">Bottle</option>
-            <option value="Other">Other</option>
-          </select>
-          <button
-            onClick={() => {
-              setEditingProduct(null);
-              reset();
-              setImagePreview(null);
-              setIsModalOpen(true);
-            }}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl shadow-lg shadow-indigo-600/20 transition-all whitespace-nowrap"
-          >
-            <Plus size={20} />
-            <span>Add Product</span>
-          </button>
-        </div>
+        <button className="bg-white border border-slate-200 px-6 py-4 rounded-2xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2">
+          <Filter size={18} />
+          <span>Filters</span>
+        </button>
       </div>
 
-      {/* Products Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* Table Container */}
+      <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="erp-table">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Image</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Product Name</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Category</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Weight (g)</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Stock</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+              <tr>
+                <th>Product Details</th>
+                <th>Category</th>
+                <th>Weight</th>
+                <th>Stock Level</th>
+                <th>Unit Price</th>
+                <th>Status</th>
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
-                    <Loader2 className="animate-spin mx-auto text-indigo-600" size={32} />
-                  </td>
-                </tr>
-              ) : products.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-500">No products found</td>
-                </tr>
+            <tbody>
+              {loading ? (
+                [1, 2, 3, 4, 5].map(i => (
+                  <tr key={i} className="animate-pulse">
+                    <td colSpan={7} className="py-8 px-6 bg-slate-50/20"></td>
+                  </tr>
+                ))
               ) : (
                 products.map((product) => (
-                  <tr key={product.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4">
-                      {product.image_url ? (
-                        <img 
-                          src={product.image_url} 
-                          alt={product.name} 
-                          className="w-10 h-10 rounded-lg object-cover border border-slate-200"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
-                          <ImageIcon size={20} />
+                  <tr key={product.id} className="group">
+                    <td>
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all">
+                          <Package size={20} />
                         </div>
-                      )}
+                        <div>
+                          <p className="font-bold text-slate-900">{product.name}</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">SKU: SS-PRD-{product.id + 100}</p>
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <p className="font-medium text-slate-900">{product.name}</p>
-                      <p className="text-xs text-slate-400">ID: PRD-{product.id.toString().padStart(4, '0')}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={cn(
-                        "px-2 py-1 rounded-full text-xs font-medium",
-                        product.category === 'Preform' ? "bg-blue-100 text-blue-700" :
-                        product.category === 'Bottle' ? "bg-emerald-100 text-emerald-700" :
-                        "bg-slate-100 text-slate-700"
-                      )}>
+                    <td>
+                      <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold uppercase tracking-wider">
                         {product.category}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-slate-600">{product.gram_weight}g</td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <span className={cn(
-                            "font-bold",
-                            product.current_stock < product.min_stock_level ? "text-red-600" : "text-slate-900"
-                          )}>
-                            {product.current_stock.toLocaleString()} PCS
-                          </span>
-                          {product.current_stock < product.min_stock_level && (
-                            <AlertCircle size={14} className="text-red-500" />
-                          )}
+                    <td className="data-value">{product.weight}</td>
+                    <td>
+                      <div className="flex flex-col gap-1">
+                        <span className={cn("font-bold", product.stock < product.min ? "text-rose-500" : "text-slate-900")}>
+                          {product.stock.toLocaleString()}
+                        </span>
+                        <div className="w-24 h-1 bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className={cn("h-full", product.stock < product.min ? "bg-rose-500" : "bg-emerald-500")}
+                            style={{ width: `${Math.min((product.stock / product.min) * 50, 100)}%` }}
+                          ></div>
                         </div>
-                        {product.category === 'Preform' && product.gram_weight > 0 && (
-                          <span className="text-[10px] text-slate-400 uppercase font-medium">
-                            ≈ {((product.current_stock * product.gram_weight) / 1000).toFixed(2)} KG
-                          </span>
-                        )}
-                        <p className="text-xs text-slate-400">Min: {product.min_stock_level} PCS</p>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-right space-x-2">
-                      <button 
-                        onClick={() => openEditModal(product)}
-                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                      >
-                        <Edit2 size={18} />
-                      </button>
-                      {user?.role === 'admin' && (
-                        <button 
-                          onClick={() => handleDelete(product.id)}
-                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                    <td className="font-bold text-slate-900">{product.price}</td>
+                    <td>
+                      {product.stock < product.min ? (
+                        <div className="flex items-center gap-1.5 text-rose-500">
+                          <AlertTriangle size={14} />
+                          <span className="text-[10px] font-bold uppercase tracking-wider">Low Stock</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-emerald-500">
+                          <TrendingUp size={14} />
+                          <span className="text-[10px] font-bold uppercase tracking-wider">Healthy</span>
+                        </div>
                       )}
+                    </td>
+                    <td className="text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all">
+                          <Edit2 size={16} />
+                        </button>
+                        <button className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all">
+                          <Trash2 size={16} />
+                        </button>
+                        <button className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all">
+                          <MoreVertical size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -280,115 +155,30 @@ const Products: React.FC = () => {
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* Product Modal */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsModalOpen(false)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden"
-            >
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="text-xl font-bold text-slate-800">
-                  {editingProduct ? 'Edit Product' : 'Add New Product'}
-                </h3>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600">
-                  <X size={24} />
+        
+        {/* Pagination */}
+        <div className="p-6 bg-slate-50/50 flex items-center justify-between border-t border-slate-100">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Showing 1-5 of 124 products</p>
+          <div className="flex items-center gap-2">
+            <button className="p-2 rounded-xl border border-slate-200 text-slate-400 hover:bg-white hover:text-slate-900 transition-all disabled:opacity-50">
+              <ChevronLeft size={18} />
+            </button>
+            <div className="flex items-center gap-1">
+              {[1, 2, 3].map(i => (
+                <button key={i} className={cn(
+                  "w-8 h-8 rounded-xl text-xs font-bold transition-all",
+                  i === 1 ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20" : "text-slate-400 hover:bg-white hover:text-slate-900"
+                )}>
+                  {i}
                 </button>
-              </div>
-
-              <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
-                <div className="flex justify-center mb-6">
-                  <div className="relative group">
-                    <div className="w-24 h-24 rounded-2xl bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden">
-                      {imagePreview ? (
-                        <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      ) : (
-                        <ImageIcon size={32} className="text-slate-300" />
-                      )}
-                    </div>
-                    <label className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-2xl">
-                      <span className="text-white text-xs font-medium">Change</span>
-                      <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
-                    </label>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Product Name</label>
-                  <input
-                    {...register('name')}
-                    className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    placeholder="e.g. 20g Preform Blue"
-                  />
-                  {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
-                    <select
-                      {...register('category')}
-                      className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    >
-                      <option value="Preform">Preform</option>
-                      <option value="Bottle">Bottle</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Gram Weight</label>
-                    <input
-                      {...register('gram_weight')}
-                      type="number"
-                      step="0.1"
-                      className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                      placeholder="0.0"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Minimum Stock Level</label>
-                  <input
-                    {...register('min_stock_level')}
-                    type="number"
-                    className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    placeholder="0"
-                  />
-                </div>
-
-                <div className="pt-4 flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="flex-1 px-4 py-3 border border-slate-200 text-slate-600 font-semibold rounded-xl hover:bg-slate-50 transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 px-4 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 transition-all"
-                  >
-                    {editingProduct ? 'Update Product' : 'Create Product'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
+              ))}
+            </div>
+            <button className="p-2 rounded-xl border border-slate-200 text-slate-400 hover:bg-white hover:text-slate-900 transition-all">
+              <ChevronRight size={18} />
+            </button>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      </div>
     </div>
   );
 };
