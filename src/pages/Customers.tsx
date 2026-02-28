@@ -30,6 +30,8 @@ interface Customer {
   gst: string;
 }
 
+import { db } from '../services/db';
+
 const Customers: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,12 +55,8 @@ const Customers: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const res = await fetch('/api/customers', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setCustomers(await res.json());
-      }
+      const data = await db.customers.getAll();
+      setCustomers(data);
     } catch (error) {
       toast.error('Failed to load customers');
     } finally {
@@ -79,27 +77,19 @@ const Customers: React.FC = () => {
     }
 
     try {
-      const url = editingCustomer ? `/api/customers/${editingCustomer.id}` : '/api/customers';
-      const method = editingCustomer ? 'PUT' : 'POST';
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-
-      if (!res.ok) throw new Error('Failed to save customer');
-
-      toast.success(editingCustomer ? 'Customer updated' : 'Customer created');
+      if (editingCustomer) {
+        await db.customers.update(editingCustomer.id, formData);
+        toast.success('Customer updated');
+      } else {
+        await db.customers.create(formData);
+        toast.success('Customer created');
+      }
       setIsModalOpen(false);
       setEditingCustomer(null);
       setFormData({ name: '', phone: '', address: '', gst: '' });
       fetchCustomers();
     } catch (error) {
-      toast.error('Error saving customer');
+      toast.error('Failed to save customer');
     }
   };
 
@@ -111,11 +101,7 @@ const Customers: React.FC = () => {
 
     if (!window.confirm('Are you sure?')) return;
     try {
-      const res = await fetch(`/api/customers/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to delete');
+      await db.customers.delete(id);
       toast.success('Customer deleted');
       fetchCustomers();
     } catch (error) {
