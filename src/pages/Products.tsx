@@ -11,10 +11,12 @@ import {
   ChevronLeft,
   ChevronRight,
   TrendingUp,
-  AlertTriangle
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../utils/cn';
+import { toast } from 'react-hot-toast';
 
 import { db } from '../services/db';
 import { useAuth } from '../context/AuthContext';
@@ -73,19 +75,27 @@ const Products = () => {
     }
 
     try {
+      const payload = {
+        ...formData,
+        price: parseFloat(formData.price) || 0,
+        min_stock_level: parseInt(formData.min_stock_level) || 0,
+        stock: editingProduct ? editingProduct.stock : 0
+      };
+
       if (editingProduct) {
-        await db.products.update(editingProduct.id, formData);
-        toast.success('Product updated');
+        await db.products.update(editingProduct.id, payload);
+        toast.success('Product updated successfully');
       } else {
-        await db.products.create({ ...formData, stock: 0 });
-        toast.success('Product created');
+        await db.products.create(payload);
+        toast.success('Product created successfully');
       }
       setIsModalOpen(false);
       setEditingProduct(null);
       setFormData({ name: '', category: 'Bottle', gram_weight: '', price: '', min_stock_level: '' });
       fetchData();
-    } catch (error) {
-      toast.error('Failed to save product');
+    } catch (error: any) {
+      console.error('Error saving product:', error);
+      toast.error(error.message || 'Failed to save product');
     }
   };
 

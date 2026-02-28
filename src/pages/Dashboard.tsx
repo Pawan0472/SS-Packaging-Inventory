@@ -11,7 +11,9 @@ import {
   Box,
   Truck,
   AlertCircle,
-  Factory
+  Factory,
+  Share2,
+  Download
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -28,6 +30,7 @@ import {
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../utils/cn';
+import { toast } from 'react-hot-toast';
 
 const StatCard = ({ label, value, trend, trendValue, icon: Icon, color }: any) => (
   <motion.div 
@@ -101,6 +104,46 @@ const Dashboard = () => {
     }, 800);
   }, []);
 
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'SS Packaging ERP Report',
+          text: 'Check out the latest performance metrics for SS Packaging.',
+          url: window.location.href,
+        });
+      } catch (err) {
+        console.error('Error sharing:', err);
+      }
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      toast.success('Report link copied to clipboard');
+    }
+  };
+
+  const handleExport = () => {
+    if (!stats) return;
+    
+    const csvContent = [
+      ['Metric', 'Value', 'Trend'],
+      ['Total Sales', stats.totalSales, stats.salesTrendVal],
+      ['Total Purchases', stats.totalPurchases, stats.purchaseTrendVal],
+      ['Production Output', stats.totalProduction, stats.productionTrendVal],
+      ['Active Customers', stats.activeCustomers, stats.customerTrendVal],
+    ].map(row => row.join(',')).join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `SS_Packaging_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Report exported as CSV');
+  };
+
   if (loading) return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-pulse">
       {[1, 2, 3, 4].map(i => (
@@ -128,11 +171,19 @@ const Dashboard = () => {
               +12
             </div>
           </div>
-          <button className="bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all">
-            Share Report
+          <button 
+            onClick={handleShare}
+            className="bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2"
+          >
+            <Share2 size={16} />
+            <span>Share Report</span>
           </button>
-          <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all">
-            Export Data
+          <button 
+            onClick={handleExport}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all flex items-center gap-2"
+          >
+            <Download size={16} />
+            <span>Export Data</span>
           </button>
         </div>
       </div>
