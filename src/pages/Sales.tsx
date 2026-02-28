@@ -11,11 +11,18 @@ import {
   Users,
   Loader2,
   Eye,
-  AlertCircle
+  AlertCircle,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  ArrowUpRight,
+  Receipt,
+  MoreVertical
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { cn } from '../utils/cn';
 
@@ -53,6 +60,7 @@ const Sales: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedSale, setSelectedSale] = useState<any>(null);
+  const [search, setSearch] = useState('');
   
   // Form State
   const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -62,9 +70,29 @@ const Sales: React.FC = () => {
   const [items, setItems] = useState<SalesItem[]>([{ product_id: 0, quantity: 0, rate: 0 }]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const { token, user } = useAuth();
+  const { token, user, isDemo } = useAuth();
 
   const fetchData = async () => {
+    if (isDemo) {
+      setSales([
+        { id: 1, invoice_number: 'SAL-2024-001', date: '2024-03-22', customer_name: 'Reliance Industries', total_amount: 45000, transport_cost: 500 },
+        { id: 2, invoice_number: 'SAL-2024-002', date: '2024-03-24', customer_name: 'Tata Consumer Products', total_amount: 120000, transport_cost: 1200 },
+        { id: 3, invoice_number: 'SAL-2024-003', date: '2024-03-25', customer_name: 'Hindustan Unilever', total_amount: 65000, transport_cost: 800 },
+      ]);
+      setProducts([
+        { id: 1, name: '500ml PET Bottle', current_stock: 12500 },
+        { id: 2, name: '1L PET Preform', current_stock: 4200 },
+        { id: 3, name: '2L PET Bottle', current_stock: 8900 },
+      ]);
+      setCustomers([
+        { id: 1, name: 'Reliance Industries' },
+        { id: 2, name: 'Tata Consumer Products' },
+        { id: 3, name: 'Hindustan Unilever' },
+      ]);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const [sRes, prodRes, custRes] = await Promise.all([
@@ -72,9 +100,9 @@ const Sales: React.FC = () => {
         fetch('/api/products', { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch('/api/customers', { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
-      setSales(await sRes.json());
-      setProducts(await prodRes.json());
-      setCustomers(await custRes.json());
+      if (sRes.ok) setSales(await sRes.json());
+      if (prodRes.ok) setProducts(await prodRes.json());
+      if (custRes.ok) setCustomers(await custRes.json());
     } catch (error) {
       toast.error('Failed to load data');
     } finally {
@@ -84,7 +112,7 @@ const Sales: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [token]);
+  }, [token, isDemo]);
 
   const addItem = () => setItems([...items, { product_id: 0, quantity: 0, rate: 0 }]);
   const removeItem = (index: number) => setItems(items.filter((_, i) => i !== index));
@@ -100,6 +128,13 @@ const Sales: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDemo) {
+      toast.success('Demo: Sale recorded successfully');
+      setIsModalOpen(false);
+      resetForm();
+      return;
+    }
+
     if (!customerId || items.some(i => !i.product_id || !i.quantity || !i.rate)) {
       return toast.error('Please fill all required fields');
     }
@@ -149,6 +184,19 @@ const Sales: React.FC = () => {
   };
 
   const viewDetails = async (id: number) => {
+    if (isDemo) {
+      const s = sales.find(sale => sale.id === id);
+      setSelectedSale({
+        ...s,
+        items: [
+          { id: 1, product_name: '500ml PET Bottle', quantity: 5000, rate: 4.50, total: 22500 },
+          { id: 2, product_name: '2L PET Bottle', quantity: 2000, rate: 12.00, total: 24000 },
+        ]
+      });
+      setIsViewModalOpen(true);
+      return;
+    }
+
     try {
       const res = await fetch(`/api/sales/${id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -161,63 +209,134 @@ const Sales: React.FC = () => {
     }
   };
 
+  const filteredSales = sales.filter(s => 
+    s.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
+    s.customer_name.toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-slate-800">Sales Invoices</h2>
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Sales</h2>
+          <p className="text-slate-500 mt-1">Manage customer orders and dispatch invoices.</p>
+        </div>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl shadow-lg shadow-indigo-600/20 transition-all"
+          className="bg-indigo-600 text-white px-6 py-3 rounded-2xl text-sm font-bold shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 transition-all flex items-center gap-2 group"
         >
-          <Plus size={20} />
+          <Plus size={20} className="group-hover:rotate-90 transition-transform" />
           <span>New Sale</span>
         </button>
       </div>
 
-      {/* Sales Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* Filters & Search */}
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <input 
+            type="text" 
+            placeholder="Search by invoice # or customer..." 
+            className="w-full pl-12 pr-6 py-4 rounded-2xl bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <button className="bg-white border border-slate-200 px-6 py-4 rounded-2xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2">
+          <Filter size={18} />
+          <span>Filters</span>
+        </button>
+      </div>
+
+      {/* Table Container */}
+      <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="erp-table">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Invoice #</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Amount</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+              <tr>
+                <th>Invoice Details</th>
+                <th>Date</th>
+                <th>Customer</th>
+                <th>Total Amount</th>
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {isLoading ? (
+                [1, 2, 3, 4, 5].map(i => (
+                  <tr key={i} className="animate-pulse">
+                    <td colSpan={5} className="py-8 px-6 bg-slate-50/20"></td>
+                  </tr>
+                ))
+              ) : filteredSales.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center">
-                    <Loader2 className="animate-spin mx-auto text-indigo-600" size={32} />
+                  <td colSpan={5} className="py-20 text-center">
+                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
+                      <TrendingUp size={32} />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900">No sales recorded</h3>
+                    <p className="text-slate-500 mt-1 font-medium">Create your first sales invoice to see it here.</p>
                   </td>
                 </tr>
-              ) : sales.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500">No sales recorded</td>
-                </tr>
               ) : (
-                sales.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-slate-900">{s.invoice_number}</td>
-                    <td className="px-6 py-4 text-slate-600">{format(new Date(s.date), 'dd MMM yyyy')}</td>
-                    <td className="px-6 py-4 text-slate-600">{s.customer_name}</td>
-                    <td className="px-6 py-4 font-bold text-emerald-600">₹{s.total_amount.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-right">
-                      <button 
-                        onClick={() => viewDetails(s.id)}
-                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                      >
-                        <Eye size={18} />
-                      </button>
+                filteredSales.map((s) => (
+                  <tr key={s.id} className="group">
+                    <td>
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all">
+                          <FileText size={20} />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900">{s.invoice_number}</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ID: {s.id + 2000}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="text-slate-600 font-medium">{format(new Date(s.date), 'dd MMM yyyy')}</td>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <Users size={14} className="text-slate-400" />
+                        <span className="font-bold text-slate-700">{s.customer_name}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="flex flex-col">
+                        <span className="text-emerald-600 font-bold">₹{s.total_amount.toLocaleString()}</span>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Incl. ₹{s.transport_cost} Transport</span>
+                      </div>
+                    </td>
+                    <td className="text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                        <button 
+                          onClick={() => viewDetails(s.id)}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+                        >
+                          <Eye size={18} />
+                        </button>
+                        <button className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all">
+                          <MoreVertical size={18} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
+        </div>
+        
+        {/* Pagination */}
+        <div className="p-6 bg-slate-50/50 flex items-center justify-between border-t border-slate-100">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Showing {filteredSales.length} results</p>
+          <div className="flex items-center gap-2">
+            <button className="p-2 rounded-xl border border-slate-200 text-slate-400 hover:bg-white hover:text-slate-900 transition-all disabled:opacity-50">
+              <ChevronLeft size={18} />
+            </button>
+            <button className="p-2 rounded-xl border border-slate-200 text-slate-400 hover:bg-white hover:text-slate-900 transition-all">
+              <ChevronRight size={18} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -230,64 +349,64 @@ const Sales: React.FC = () => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsModalOpen(false)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-5xl bg-white rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             >
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
-                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                  <TrendingUp className="text-indigo-600" />
-                  Record New Sale
-                </h3>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600">
-                  <X size={24} />
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-900">Record New Sale</h3>
+                  <p className="text-xs text-slate-500 mt-1 font-medium uppercase tracking-wider">Enter dispatch and client details</p>
+                </div>
+                <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all shadow-sm">
+                  <X size={20} />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto">
+              <form onSubmit={handleSubmit} className="p-8 space-y-8 overflow-y-auto">
                 {/* Master Info */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Invoice Number</label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <label className="label-caps ml-1">Invoice Number</label>
                     <div className="relative">
-                      <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <FileText className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                       <input
                         required
-                        className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                        className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                         value={invoiceNumber}
                         onChange={(e) => setInvoiceNumber(e.target.value)}
-                        placeholder="SAL-001"
+                        placeholder="SAL-2024-001"
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+                  <div className="space-y-2">
+                    <label className="label-caps ml-1">Dispatch Date</label>
                     <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                       <input
                         required
                         type="date"
-                        className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                        className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                         value={date}
                         onChange={(e) => setDate(e.target.value)}
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Customer</label>
+                  <div className="space-y-2">
+                    <label className="label-caps ml-1">Select Customer</label>
                     <div className="relative">
-                      <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                       <select
                         required
-                        className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                        className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none appearance-none transition-all"
                         value={customerId}
                         onChange={(e) => setCustomerId(e.target.value)}
                       >
-                        <option value="">Select Customer</option>
+                        <option value="">Choose Client</option>
                         {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
                     </div>
@@ -297,14 +416,14 @@ const Sales: React.FC = () => {
                 {/* Items Section */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h4 className="font-semibold text-slate-700">Sales Items</h4>
+                    <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Sales Items</h4>
                     <button
                       type="button"
                       onClick={addItem}
-                      className="text-indigo-600 hover:text-indigo-700 text-sm font-medium flex items-center gap-1"
+                      className="text-indigo-600 hover:text-indigo-700 text-xs font-bold flex items-center gap-1.5 bg-indigo-50 px-3 py-1.5 rounded-lg transition-all"
                     >
                       <PlusCircle size={16} />
-                      Add Item
+                      Add Another Item
                     </button>
                   </div>
 
@@ -315,14 +434,14 @@ const Sales: React.FC = () => {
 
                       return (
                         <div key={index} className={cn(
-                          "grid grid-cols-12 gap-3 items-end p-3 rounded-xl border transition-colors",
-                          isLowStock ? "bg-red-50 border-red-200" : "bg-slate-50 border-slate-100"
+                          "grid grid-cols-12 gap-4 items-end p-4 rounded-2xl border transition-all",
+                          isLowStock ? "bg-rose-50/50 border-rose-100" : "bg-slate-50/50 border-slate-100"
                         )}>
-                          <div className="col-span-4">
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Product</label>
+                          <div className="col-span-12 md:col-span-5">
+                            <label className="label-caps ml-1 mb-1 block">Product</label>
                             <select
                               required
-                              className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                              className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none text-sm transition-all"
                               value={item.product_id}
                               onChange={(e) => updateItem(index, 'product_id', parseInt(e.target.value))}
                             >
@@ -330,49 +449,46 @@ const Sales: React.FC = () => {
                               {products.map(p => <option key={p.id} value={p.id}>{p.name} (Stock: {p.current_stock})</option>)}
                             </select>
                           </div>
-                          <div className="col-span-2">
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Qty (PCS)</label>
+                          <div className="col-span-6 md:col-span-2">
+                            <label className="label-caps ml-1 mb-1 block">Quantity</label>
                             <input
                               required
                               type="number"
                               className={cn(
-                                "w-full px-3 py-2 rounded-lg border focus:ring-2 outline-none text-sm",
-                                isLowStock ? "border-red-300 focus:ring-red-500" : "border-slate-200 focus:ring-indigo-500"
+                                "w-full px-4 py-2.5 rounded-xl bg-white border focus:ring-2 outline-none text-sm transition-all",
+                                isLowStock ? "border-rose-300 focus:ring-rose-500/10" : "border-slate-200 focus:ring-indigo-500/10"
                               )}
                               value={item.quantity}
                               onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value))}
                             />
                           </div>
-                          <div className="col-span-2">
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Rate</label>
+                          <div className="col-span-6 md:col-span-2">
+                            <label className="label-caps ml-1 mb-1 block">Rate (₹)</label>
                             <input
                               required
                               type="number"
-                              className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                              className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none text-sm transition-all"
                               value={item.rate}
                               onChange={(e) => updateItem(index, 'rate', parseFloat(e.target.value))}
                             />
                           </div>
-                          <div className="col-span-3">
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Total</label>
-                            <div className="px-3 py-2 text-sm font-bold text-slate-700 flex items-center justify-between">
+                          <div className="col-span-10 md:col-span-2">
+                            <label className="label-caps ml-1 mb-1 block">Subtotal</label>
+                            <div className="px-4 py-2.5 text-sm font-bold text-slate-900 bg-white rounded-xl border border-slate-100 flex items-center justify-between data-value">
                               <span>₹{(item.quantity * item.rate).toLocaleString()}</span>
                               {isLowStock && (
-                                <div className="flex items-center gap-1 text-red-600 text-[10px] font-bold">
-                                  <AlertCircle size={12} />
-                                  <span>LOW STOCK</span>
-                                </div>
+                                <AlertCircle size={14} className="text-rose-500" />
                               )}
                             </div>
                           </div>
-                          <div className="col-span-1 flex justify-end">
+                          <div className="col-span-2 md:col-span-1 flex justify-end">
                             <button
                               type="button"
                               onClick={() => removeItem(index)}
                               disabled={items.length === 1}
-                              className="p-2 text-slate-400 hover:text-red-500 disabled:opacity-30"
+                              className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all disabled:opacity-30"
                             >
-                              <Trash2 size={18} />
+                              <Trash2 size={20} />
                             </button>
                           </div>
                         </div>
@@ -382,46 +498,58 @@ const Sales: React.FC = () => {
                 </div>
 
                 {/* Footer Info */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-slate-100">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Dispatch Image (Optional)</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                      className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500">Transport Cost:</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 pt-6 border-t border-slate-100">
+                  <div className="space-y-4">
+                    <label className="label-caps ml-1 block">Dispatch Document (Optional)</label>
+                    <div className="relative group">
                       <input
-                        type="number"
-                        className="w-32 px-3 py-1 rounded-lg border border-slate-200 text-right font-bold"
-                        value={transportCost}
-                        onChange={(e) => setTransportCost(e.target.value)}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                       />
+                      <div className="w-full py-8 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-2 group-hover:border-indigo-400 group-hover:bg-indigo-50/30 transition-all">
+                        <FileText className="text-slate-400 group-hover:text-indigo-500" size={32} />
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                          {selectedFile ? selectedFile.name : 'Upload Dispatch Proof'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center text-xl font-bold text-slate-900 pt-2 border-t border-slate-100">
-                      <span>Total Amount:</span>
-                      <span className="text-indigo-600">₹{calculateTotal().toLocaleString()}</span>
+                  </div>
+                  <div className="space-y-4 bg-slate-50 p-6 rounded-2xl">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Transport Cost</span>
+                      <div className="relative w-32">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">₹</span>
+                        <input
+                          type="number"
+                          className="w-full pl-7 pr-3 py-2 rounded-xl border border-slate-200 text-right font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/10"
+                          value={transportCost}
+                          onChange={(e) => setTransportCost(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="h-px bg-slate-200"></div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-bold text-slate-900 uppercase tracking-widest">Grand Total</span>
+                      <span className="text-2xl font-bold text-indigo-600 data-value">₹{calculateTotal().toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="pt-4 flex gap-3 sticky bottom-0 bg-white pb-2">
+                <div className="pt-4 flex gap-4 sticky bottom-0 bg-white pb-2">
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="flex-1 px-4 py-3 border border-slate-200 text-slate-600 font-semibold rounded-xl hover:bg-slate-50 transition-all"
+                    className="flex-1 px-6 py-4 border border-slate-200 text-slate-600 font-bold rounded-2xl hover:bg-slate-50 transition-all"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 transition-all"
+                    className="flex-1 px-6 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-600/20 transition-all"
                   >
-                    Save Sale
+                    Confirm Sale
                   </button>
                 </div>
               </form>
@@ -439,76 +567,88 @@ const Sales: React.FC = () => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsViewModalOpen(false)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden"
+              className="relative w-full max-w-3xl bg-white rounded-[32px] shadow-2xl overflow-hidden"
             >
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="text-xl font-bold text-slate-800">Invoice Details: {selectedSale.invoice_number}</h3>
-                <button onClick={() => setIsViewModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600">
-                  <X size={24} />
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-900">Invoice: {selectedSale.invoice_number}</h3>
+                  <p className="text-xs text-slate-500 mt-1 font-medium uppercase tracking-wider">Dispatch Details</p>
+                </div>
+                <button onClick={() => setIsViewModalOpen(false)} className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all shadow-sm">
+                  <X size={20} />
                 </button>
               </div>
-              <div className="p-6 space-y-6">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-slate-500">Customer</p>
-                    <p className="font-bold text-slate-900">{selectedSale.customer_name}</p>
+              <div className="p-8 space-y-8">
+                <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-1">
+                    <p className="label-caps">Customer</p>
+                    <p className="text-lg font-bold text-slate-900">{selectedSale.customer_name}</p>
                   </div>
-                  <div>
-                    <p className="text-slate-500">Date</p>
-                    <p className="font-bold text-slate-900">{format(new Date(selectedSale.date), 'dd MMM yyyy')}</p>
+                  <div className="space-y-1">
+                    <p className="label-caps">Dispatch Date</p>
+                    <p className="text-lg font-bold text-slate-900">{format(new Date(selectedSale.date), 'dd MMMM yyyy')}</p>
                   </div>
                 </div>
 
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-100">
-                      <th className="text-left py-2 text-slate-500">Product</th>
-                      <th className="text-right py-2 text-slate-500">Qty</th>
-                      <th className="text-right py-2 text-slate-500">Rate</th>
-                      <th className="text-right py-2 text-slate-500">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {selectedSale.items.map((item: any) => (
-                      <tr key={item.id}>
-                        <td className="py-2 font-medium">{item.product_name}</td>
-                        <td className="py-2 text-right">{item.quantity}</td>
-                        <td className="py-2 text-right">₹{item.rate}</td>
-                        <td className="py-2 text-right font-bold">₹{item.total.toLocaleString()}</td>
+                <div className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-100">
+                  <table className="w-full text-left border-separate border-spacing-0">
+                    <thead>
+                      <tr>
+                        <th className="py-3 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200">Product</th>
+                        <th className="py-3 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200 text-right">Qty</th>
+                        <th className="py-3 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200 text-right">Rate</th>
+                        <th className="py-3 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200 text-right">Total</th>
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t border-slate-200">
-                      <td colSpan={3} className="py-2 text-right text-slate-500">Subtotal</td>
-                      <td className="py-2 text-right font-bold">₹{(selectedSale.total_amount - selectedSale.transport_cost).toLocaleString()}</td>
-                    </tr>
-                    <tr>
-                      <td colSpan={3} className="py-2 text-right text-slate-500">Transport</td>
-                      <td className="py-2 text-right font-bold">₹{selectedSale.transport_cost.toLocaleString()}</td>
-                    </tr>
-                    <tr className="text-lg">
-                      <td colSpan={3} className="py-2 text-right font-bold text-slate-900">Total</td>
-                      <td className="py-2 text-right font-bold text-indigo-600">₹{selectedSale.total_amount.toLocaleString()}</td>
-                    </tr>
-                  </tfoot>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {selectedSale.items.map((item: any) => (
+                        <tr key={item.id} className="bg-white">
+                          <td className="py-3 px-4 text-sm font-bold text-slate-900">{item.product_name}</td>
+                          <td className="py-3 px-4 text-sm text-slate-600 text-right data-value">{item.quantity}</td>
+                          <td className="py-3 px-4 text-sm text-slate-600 text-right data-value">₹{item.rate}</td>
+                          <td className="py-3 px-4 text-sm font-bold text-slate-900 text-right data-value">₹{item.total.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-slate-50">
+                      <tr>
+                        <td colSpan={3} className="py-3 px-4 text-xs font-bold text-slate-400 text-right uppercase tracking-widest">Subtotal</td>
+                        <td className="py-3 px-4 text-sm font-bold text-slate-900 text-right data-value">₹{(selectedSale.total_amount - selectedSale.transport_cost).toLocaleString()}</td>
+                      </tr>
+                      <tr>
+                        <td colSpan={3} className="py-3 px-4 text-xs font-bold text-slate-400 text-right uppercase tracking-widest">Transport</td>
+                        <td className="py-3 px-4 text-sm font-bold text-slate-900 text-right data-value">₹{selectedSale.transport_cost.toLocaleString()}</td>
+                      </tr>
+                      <tr className="bg-indigo-50">
+                        <td colSpan={3} className="py-4 px-4 text-sm font-bold text-indigo-900 text-right uppercase tracking-widest">Grand Total</td>
+                        <td className="py-4 px-4 text-xl font-bold text-indigo-600 text-right data-value">₹{selectedSale.total_amount.toLocaleString()}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
 
                 {selectedSale.image_url && (
-                  <div className="pt-4 border-t border-slate-100">
-                    <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Dispatch Image</p>
-                    <img 
-                      src={selectedSale.image_url} 
-                      alt="Dispatch" 
-                      className="max-h-64 rounded-xl border border-slate-200 mx-auto"
-                      referrerPolicy="no-referrer"
-                    />
+                  <div className="pt-4">
+                    <p className="label-caps mb-4">Dispatch Document</p>
+                    <div className="relative group overflow-hidden rounded-2xl border border-slate-200">
+                      <img 
+                        src={selectedSale.image_url} 
+                        alt="Dispatch" 
+                        className="w-full h-auto max-h-80 object-contain bg-slate-100"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/20 transition-all flex items-center justify-center">
+                        <button className="bg-white p-3 rounded-full shadow-xl opacity-0 group-hover:opacity-100 transition-all scale-90 group-hover:scale-100">
+                          <ExternalLink size={20} className="text-slate-900" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

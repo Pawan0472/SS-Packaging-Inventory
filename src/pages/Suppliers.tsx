@@ -1,8 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, Plus, Search, Edit2, Trash2, X, Phone, MapPin, Hash, Loader2 } from 'lucide-react';
+import { 
+  Truck, 
+  Plus, 
+  Search, 
+  Edit2, 
+  Trash2, 
+  X, 
+  Phone, 
+  MapPin, 
+  Hash, 
+  Loader2,
+  MoreVertical,
+  ExternalLink,
+  Filter,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '../utils/cn';
 
 interface Supplier {
   id: number;
@@ -18,17 +35,29 @@ const Suppliers: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [search, setSearch] = useState('');
-  const { token, user } = useAuth();
+  const { token, user, isDemo } = useAuth();
 
   const [formData, setFormData] = useState({ name: '', phone: '', address: '', gst: '' });
 
   const fetchSuppliers = async () => {
+    if (isDemo) {
+      setSuppliers([
+        { id: 1, name: 'Global Polymers Ltd', phone: '+91 98765 43210', address: 'Plot 45, GIDC Industrial Estate, Vapi, Gujarat', gst: '24AAAAA0000A1Z5' },
+        { id: 2, name: 'Apex Masterbatch Solutions', phone: '+91 88888 77777', address: '12/B, MIDC Phase 2, Thane, Maharashtra', gst: '27BBBBB1111B1Z2' },
+        { id: 3, name: 'Shree Krishna Packaging', phone: '+91 99000 11223', address: 'Survey No. 442, Silvassa Road, Daman', gst: '25CCCCC2222C1Z9' },
+      ]);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const res = await fetch('/api/suppliers', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      setSuppliers(await res.json());
+      if (res.ok) {
+        setSuppliers(await res.json());
+      }
     } catch (error) {
       toast.error('Failed to load suppliers');
     } finally {
@@ -38,10 +67,16 @@ const Suppliers: React.FC = () => {
 
   useEffect(() => {
     fetchSuppliers();
-  }, [token]);
+  }, [token, isDemo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDemo) {
+      toast.success('Demo: Supplier saved successfully');
+      setIsModalOpen(false);
+      return;
+    }
+
     try {
       const url = editingSupplier ? `/api/suppliers/${editingSupplier.id}` : '/api/suppliers';
       const method = editingSupplier ? 'PUT' : 'POST';
@@ -68,6 +103,11 @@ const Suppliers: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
+    if (isDemo) {
+      toast.success('Demo: Supplier deleted');
+      return;
+    }
+
     if (!window.confirm('Are you sure?')) return;
     try {
       const res = await fetch(`/api/suppliers/${id}`, {
@@ -85,17 +125,12 @@ const Suppliers: React.FC = () => {
   const filteredSuppliers = suppliers.filter(s => s.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input
-            type="text"
-            placeholder="Search suppliers..."
-            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Suppliers</h2>
+          <p className="text-slate-500 mt-1">Manage raw material vendors and partners.</p>
         </div>
         <button
           onClick={() => {
@@ -103,99 +138,202 @@ const Suppliers: React.FC = () => {
             setFormData({ name: '', phone: '', address: '', gst: '' });
             setIsModalOpen(true);
           }}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl shadow-lg shadow-indigo-600/20 transition-all"
+          className="bg-indigo-600 text-white px-6 py-3 rounded-2xl text-sm font-bold shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 transition-all flex items-center gap-2 group"
         >
-          <Plus size={20} />
-          <span>Add Supplier</span>
+          <Plus size={20} className="group-hover:rotate-90 transition-transform" />
+          <span>Add New Supplier</span>
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {isLoading ? (
-          <div className="col-span-full py-12 text-center"><Loader2 className="animate-spin mx-auto text-indigo-600" size={32} /></div>
-        ) : filteredSuppliers.length === 0 ? (
-          <div className="col-span-full py-12 text-center text-slate-500">No suppliers found</div>
-        ) : (
-          filteredSuppliers.map((supplier) => (
-            <motion.div
-              layout
-              key={supplier.id}
-              className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
-                  <Truck size={24} />
-                </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
-                    onClick={() => {
-                      setEditingSupplier(supplier);
-                      setFormData(supplier);
-                      setIsModalOpen(true);
-                    }}
-                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                  >
-                    <Edit2 size={16} />
-                  </button>
-                  {user?.role === 'admin' && (
-                    <button 
-                      onClick={() => handleDelete(supplier.id)}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
-              </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-4">{supplier.name}</h3>
-              <div className="space-y-3 text-sm text-slate-600">
-                <div className="flex items-center gap-3">
-                  <Phone size={16} className="text-slate-400" />
-                  <span>{supplier.phone || 'No phone'}</span>
-                </div>
-                <div className="flex items-start gap-3">
-                  <MapPin size={16} className="text-slate-400 mt-0.5" />
-                  <span className="line-clamp-2">{supplier.address || 'No address'}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Hash size={16} className="text-slate-400" />
-                  <span>GST: {supplier.gst || 'N/A'}</span>
-                </div>
-              </div>
-            </motion.div>
-          ))
-        )}
+      {/* Filters & Search */}
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <input 
+            type="text" 
+            placeholder="Search suppliers by name, GST or location..." 
+            className="w-full pl-12 pr-6 py-4 rounded-2xl bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <button className="bg-white border border-slate-200 px-6 py-4 rounded-2xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2">
+          <Filter size={18} />
+          <span>Filters</span>
+        </button>
       </div>
 
+      {/* Suppliers Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <AnimatePresence mode="popLayout">
+          {isLoading ? (
+            [1, 2, 3].map(i => (
+              <div key={i} className="h-64 bg-slate-200 rounded-3xl animate-pulse"></div>
+            ))
+          ) : filteredSuppliers.length === 0 ? (
+            <div className="col-span-full py-20 text-center bento-card">
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
+                <Truck size={32} />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900">No suppliers found</h3>
+              <p className="text-slate-500 mt-1">Try adjusting your search or add a new vendor.</p>
+            </div>
+          ) : (
+            filteredSuppliers.map((supplier) => (
+              <motion.div
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                key={supplier.id}
+                className="bento-card group"
+              >
+                <div className="flex justify-between items-start mb-6">
+                  <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
+                    <Truck size={24} />
+                  </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                    <button 
+                      onClick={() => {
+                        setEditingSupplier(supplier);
+                        setFormData(supplier);
+                        setIsModalOpen(true);
+                      }}
+                      className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    {user?.role === 'admin' && (
+                      <button 
+                        onClick={() => handleDelete(supplier.id)}
+                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <h3 className="text-xl font-bold text-slate-900 mb-6 group-hover:text-indigo-600 transition-colors">{supplier.name}</h3>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
+                      <Phone size={14} />
+                    </div>
+                    <span className="text-sm font-medium text-slate-600">{supplier.phone || 'No phone'}</span>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 shrink-0">
+                      <MapPin size={14} />
+                    </div>
+                    <span className="text-sm font-medium text-slate-600 line-clamp-2">{supplier.address || 'No address'}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
+                      <Hash size={14} />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="label-caps">GST Number</span>
+                      <span className="text-xs font-bold text-slate-900 data-value">{supplier.gst || 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Partner</span>
+                  <button className="text-indigo-600 hover:underline flex items-center gap-1 text-xs font-bold">
+                    <span>View History</span>
+                    <ExternalLink size={12} />
+                  </button>
+                </div>
+              </motion.div>
+            ))
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Modal */}
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="text-xl font-bold text-slate-800">{editingSupplier ? 'Edit Supplier' : 'Add Supplier'}</h3>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600"><X size={24} /></button>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              onClick={() => setIsModalOpen(false)} 
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.9, y: 20 }} 
+              className="relative w-full max-w-lg bg-white rounded-[32px] shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-900">{editingSupplier ? 'Edit Supplier' : 'New Supplier'}</h3>
+                  <p className="text-xs text-slate-500 mt-1 font-medium uppercase tracking-wider">Fill in vendor information</p>
+                </div>
+                <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all shadow-sm">
+                  <X size={20} />
+                </button>
               </div>
-              <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Supplier Name</label>
-                  <input required className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+              <form onSubmit={handleSubmit} className="p-8 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="label-caps ml-1">Supplier Name</label>
+                    <input 
+                      required 
+                      className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all" 
+                      value={formData.name} 
+                      onChange={e => setFormData({...formData, name: e.target.value})} 
+                      placeholder="e.g. Global Polymers"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="label-caps ml-1">Phone Number</label>
+                    <input 
+                      className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all" 
+                      value={formData.phone} 
+                      onChange={e => setFormData({...formData, phone: e.target.value})} 
+                      placeholder="+91 00000 00000"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-                  <input className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                <div className="space-y-2">
+                  <label className="label-caps ml-1">GST Number</label>
+                  <input 
+                    className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all" 
+                    value={formData.gst} 
+                    onChange={e => setFormData({...formData, gst: e.target.value})} 
+                    placeholder="24AAAAA0000A1Z5"
+                  />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
-                  <textarea className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none" rows={3} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+                <div className="space-y-2">
+                  <label className="label-caps ml-1">Full Address</label>
+                  <textarea 
+                    className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all" 
+                    rows={3} 
+                    value={formData.address} 
+                    onChange={e => setFormData({...formData, address: e.target.value})} 
+                    placeholder="Enter complete office/factory address..."
+                  />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">GST Number</label>
-                  <input className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none" value={formData.gst} onChange={e => setFormData({...formData, gst: e.target.value})} />
-                </div>
-                <div className="pt-4 flex gap-3">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-3 border border-slate-200 text-slate-600 font-semibold rounded-xl hover:bg-slate-50 transition-all">Cancel</button>
-                  <button type="submit" className="flex-1 px-4 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 transition-all">Save</button>
+                <div className="pt-4 flex gap-4">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsModalOpen(false)} 
+                    className="flex-1 px-6 py-4 border border-slate-200 text-slate-600 font-bold rounded-2xl hover:bg-slate-50 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="flex-1 px-6 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-600/20 transition-all"
+                  >
+                    Save Supplier
+                  </button>
                 </div>
               </form>
             </motion.div>
