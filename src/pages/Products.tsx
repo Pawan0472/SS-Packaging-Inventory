@@ -16,24 +16,44 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../utils/cn';
 
+import { db } from '../services/db';
+import { useAuth } from '../context/AuthContext';
+
 const Products = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const { isDemo } = useAuth();
 
   useEffect(() => {
-    // Beautiful mock data for immediate "wow" factor
-    setTimeout(() => {
-      setProducts([
-        { id: 1, name: '500ml PET Bottle', category: 'Bottle', weight: '18g', stock: 12500, min: 5000, price: '₹4.50' },
-        { id: 2, name: '1L PET Preform', category: 'Preform', weight: '24g', stock: 4200, min: 10000, price: '₹8.20' },
-        { id: 3, name: '2L PET Bottle', category: 'Bottle', weight: '32g', stock: 8900, min: 5000, price: '₹12.00' },
-        { id: 4, name: '28mm Blue Cap', category: 'Other', weight: '2.5g', stock: 1200, min: 5000, price: '₹0.85' },
-        { id: 5, name: '500ml Preform', category: 'Preform', weight: '16g', stock: 15000, min: 10000, price: '₹3.90' },
-      ]);
-      setLoading(false);
-    }, 600);
-  }, []);
+    const fetchData = async () => {
+      if (isDemo) {
+        // Beautiful mock data for immediate "wow" factor
+        setTimeout(() => {
+          setProducts([
+            { id: 1, name: '500ml PET Bottle', category: 'Bottle', weight: '18g', stock: 12500, min: 5000, price: '₹4.50' },
+            { id: 2, name: '1L PET Preform', category: 'Preform', weight: '24g', stock: 4200, min: 10000, price: '₹8.20' },
+            { id: 3, name: '2L PET Bottle', category: 'Bottle', weight: '32g', stock: 8900, min: 5000, price: '₹12.00' },
+            { id: 4, name: '28mm Blue Cap', category: 'Other', weight: '2.5g', stock: 1200, min: 5000, price: '₹0.85' },
+            { id: 5, name: '500ml Preform', category: 'Preform', weight: '16g', stock: 15000, min: 10000, price: '₹3.90' },
+          ]);
+          setLoading(false);
+        }, 600);
+        return;
+      }
+
+      try {
+        const data = await db.products.getAll();
+        setProducts(data);
+      } catch (error) {
+        console.error('Failed to fetch products:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [isDemo]);
 
   return (
     <div className="space-y-8">

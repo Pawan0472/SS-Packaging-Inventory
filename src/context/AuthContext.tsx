@@ -26,15 +26,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const navigate = useNavigate();
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('erp_token');
-    const savedUser = localStorage.getItem('erp_user');
-    
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
-      setIsDemo(savedToken === 'demo-token');
-    }
-    setIsLoading(false);
+    const initAuth = async () => {
+      const savedToken = localStorage.getItem('erp_token');
+      const savedUser = localStorage.getItem('erp_user');
+      
+      if (savedToken && savedUser) {
+        setToken(savedToken);
+        setUser(JSON.parse(savedUser));
+        setIsDemo(savedToken === 'demo-token');
+      }
+
+      // Check Supabase session if configured
+      try {
+        const { supabase, isSupabaseConfigured } = await import('../lib/supabase');
+        if (isSupabaseConfigured && supabase) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            setToken(session.access_token);
+            setUser({
+              id: session.user.id,
+              username: session.user.email?.split('@')[0] || 'User',
+              role: (session.user.user_metadata?.role as any) || 'staff'
+            });
+            setIsDemo(false);
+          }
+        }
+      } catch (e) {
+        console.error('Supabase session check failed', e);
+      }
+
+      setIsLoading(false);
+    };
+
+    initAuth();
   }, []);
 
   const login = (newToken: string, newUser: User) => {

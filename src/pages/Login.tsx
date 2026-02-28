@@ -24,35 +24,46 @@ const Login: React.FC = () => {
 
   const onSubmit = async (data: FormValues) => {
     setIsLoading(true);
-    // For the "Beautiful" overhaul, we provide a demo login that works immediately
-    // This solves the "Failed to connect" issue for the user's first impression
-    setTimeout(() => {
-      if (data.username === 'admin' && data.password === 'admin123') {
+    
+    // 1. Try Demo Login first for convenience
+    if (data.username === 'admin' && data.password === 'admin123') {
+      setTimeout(() => {
         login('demo-token', { id: 'demo-1', username: 'Admin User', role: 'admin' });
-        toast.success('Welcome to SS Packaging ERP Pro');
+        toast.success('Welcome to SS Packaging ERP Pro (Demo Mode)');
+        setIsLoading(false);
+      }, 1000);
+      return;
+    }
+
+    // 2. Real Supabase Auth (if configured)
+    try {
+      const { supabase, isSupabaseConfigured } = await import('../lib/supabase');
+      
+      if (isSupabaseConfigured && supabase) {
+        const { data: authData, error } = await supabase.auth.signInWithPassword({
+          email: data.username.includes('@') ? data.username : `${data.username}@example.com`,
+          password: data.password,
+        });
+
+        if (error) throw error;
+
+        if (authData.session) {
+          login(authData.session.access_token, {
+            id: authData.user.id,
+            username: authData.user.email?.split('@')[0] || 'User',
+            role: (authData.user.user_metadata?.role as any) || 'staff'
+          });
+          toast.success('Authenticated via Supabase');
+          return;
+        }
       } else {
-        // Fallback to real API if they want to try real auth
-        fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        })
-        .then(res => res.json())
-        .then(result => {
-          if (result.token) {
-            login(result.token, result.user);
-            toast.success('Authenticated successfully');
-          } else {
-            toast.error('Invalid credentials. Try admin/admin123 for demo.');
-          }
-        })
-        .catch(() => {
-          toast.error('Server offline. Using demo credentials (admin/admin123)');
-        })
-        .finally(() => setIsLoading(false));
+        toast.error('Supabase not configured. Use admin/admin123 for demo.');
       }
+    } catch (error: any) {
+      toast.error(error.message || 'Authentication failed');
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (

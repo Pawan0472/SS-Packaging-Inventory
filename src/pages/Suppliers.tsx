@@ -29,6 +29,8 @@ interface Supplier {
   gst: string;
 }
 
+import { db } from '../services/db';
+
 const Suppliers: React.FC = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,12 +54,8 @@ const Suppliers: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const res = await fetch('/api/suppliers', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setSuppliers(await res.json());
-      }
+      const data = await db.suppliers.getAll();
+      setSuppliers(data);
     } catch (error) {
       toast.error('Failed to load suppliers');
     } finally {
@@ -78,27 +76,19 @@ const Suppliers: React.FC = () => {
     }
 
     try {
-      const url = editingSupplier ? `/api/suppliers/${editingSupplier.id}` : '/api/suppliers';
-      const method = editingSupplier ? 'PUT' : 'POST';
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-
-      if (!res.ok) throw new Error('Failed to save supplier');
-
-      toast.success(editingSupplier ? 'Supplier updated' : 'Supplier created');
+      if (editingSupplier) {
+        await db.suppliers.update(editingSupplier.id, formData);
+        toast.success('Supplier updated');
+      } else {
+        await db.suppliers.create(formData);
+        toast.success('Supplier created');
+      }
       setIsModalOpen(false);
       setEditingSupplier(null);
       setFormData({ name: '', phone: '', address: '', gst: '' });
       fetchSuppliers();
     } catch (error) {
-      toast.error('Error saving supplier');
+      toast.error('Failed to save supplier');
     }
   };
 
@@ -110,11 +100,7 @@ const Suppliers: React.FC = () => {
 
     if (!window.confirm('Are you sure?')) return;
     try {
-      const res = await fetch(`/api/suppliers/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to delete');
+      await db.suppliers.delete(id);
       toast.success('Supplier deleted');
       fetchSuppliers();
     } catch (error) {

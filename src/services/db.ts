@@ -39,6 +39,18 @@ export const db = {
       const { data, error } = await supabase!.from('suppliers').insert([supplier]).select();
       if (error) throw error;
       return data[0];
+    },
+    async update(id: number, updates: any) {
+      if (!isSupabaseConfigured) return null;
+      const { data, error } = await supabase!.from('suppliers').update(updates).eq('id', id).select();
+      if (error) throw error;
+      return data[0];
+    },
+    async delete(id: number) {
+      if (!isSupabaseConfigured) return null;
+      const { error } = await supabase!.from('suppliers').delete().eq('id', id);
+      if (error) throw error;
+      return true;
     }
   },
   customers: {
