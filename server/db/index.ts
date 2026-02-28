@@ -27,7 +27,6 @@ let db: any;
 try {
   db = new Database(dbPath);
 } catch (err) {
-  console.error('Failed to open database:', err);
   // Fallback or dummy db object to prevent crash
   db = {
     pragma: () => {},
