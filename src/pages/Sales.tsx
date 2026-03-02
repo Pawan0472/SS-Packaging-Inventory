@@ -190,10 +190,7 @@ const Sales: React.FC = () => {
     }
 
     try {
-      const res = await fetch(`/api/sales/${id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
+      const data = await db.sales.getById(id);
       setSelectedSale(data);
       setIsViewModalOpen(true);
     } catch (error) {

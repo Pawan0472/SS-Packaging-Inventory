@@ -183,10 +183,7 @@ const Purchases: React.FC = () => {
     }
 
     try {
-      const res = await fetch(`/api/purchases/${id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
+      const data = await db.purchases.getById(id);
       setSelectedPurchase(data);
       setIsViewModalOpen(true);
     } catch (error) {

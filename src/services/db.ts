@@ -116,15 +116,42 @@ export const db = {
       
       if (iError) throw iError;
 
-      // 3. Update Stock (Simplified for now)
+      // 3. Update Stock
       for (const item of items) {
         await supabase!.rpc('increment_stock', { 
-          product_id: item.product_id, 
-          amount: item.quantity 
+          product_id: parseInt(item.product_id), 
+          amount: parseInt(item.quantity)
         });
       }
 
       return purchaseData[0];
+    },
+    async getById(id: number) {
+      if (!isSupabaseConfigured) return null;
+      const { data: purchase, error: pError } = await supabase!
+        .from('purchases')
+        .select('*, suppliers(name)')
+        .eq('id', id)
+        .single();
+      
+      if (pError) throw pError;
+
+      const { data: items, error: iError } = await supabase!
+        .from('purchase_items')
+        .select('*, products(name)')
+        .eq('purchase_id', id);
+      
+      if (iError) throw iError;
+
+      return {
+        ...purchase,
+        supplier_name: purchase.suppliers?.name,
+        items: items.map((item: any) => ({
+          ...item,
+          product_name: item.products?.name,
+          total: item.quantity * item.rate
+        }))
+      };
     }
   },
   sales: {
@@ -167,12 +194,39 @@ export const db = {
       // 3. Update Stock
       for (const item of items) {
         await supabase!.rpc('decrement_stock', { 
-          product_id: item.product_id, 
-          amount: item.quantity 
+          product_id: parseInt(item.product_id), 
+          amount: parseInt(item.quantity)
         });
       }
 
       return saleData[0];
+    },
+    async getById(id: number) {
+      if (!isSupabaseConfigured) return null;
+      const { data: sale, error: sError } = await supabase!
+        .from('sales')
+        .select('*, customers(name)')
+        .eq('id', id)
+        .single();
+      
+      if (sError) throw sError;
+
+      const { data: items, error: iError } = await supabase!
+        .from('sales_items')
+        .select('*, products(name)')
+        .eq('sale_id', id);
+      
+      if (iError) throw iError;
+
+      return {
+        ...sale,
+        customer_name: sale.customers?.name,
+        items: items.map((item: any) => ({
+          ...item,
+          product_name: item.products?.name,
+          total: item.quantity * item.rate
+        }))
+      };
     }
   },
   production: {
