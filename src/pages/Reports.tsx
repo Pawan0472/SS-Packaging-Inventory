@@ -17,6 +17,7 @@ import {
   ArrowDownRight,
   Activity
 } from 'lucide-react';
+import { db } from '../services/db';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
@@ -51,10 +52,8 @@ const Reports: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const res = await fetch('/api/reports/stock', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) setStockData(await res.json());
+      const data = await db.reports.getStockReport();
+      setStockData(data);
     } catch (error) {
       toast.error('Failed to load stock report');
     } finally {
@@ -82,11 +81,8 @@ const Reports: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const query = new URLSearchParams({ startDate, endDate }).toString();
-      const res = await fetch(`/api/reports/profit-loss?${query}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) setProfitData(await res.json());
+      const data = await db.reports.getProfitLossReport(startDate, endDate);
+      setProfitData(data);
     } catch (error) {
       toast.error('Failed to load profit report');
     } finally {

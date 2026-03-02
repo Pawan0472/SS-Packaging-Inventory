@@ -20,6 +20,7 @@ import {
   Receipt,
   MoreVertical
 } from 'lucide-react';
+import { db } from '../services/db';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -95,14 +96,14 @@ const Sales: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const [sRes, prodRes, custRes] = await Promise.all([
-        fetch('/api/sales', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('/api/products', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('/api/customers', { headers: { 'Authorization': `Bearer ${token}` } })
+      const [sData, prodData, custData] = await Promise.all([
+        db.sales.getAll(),
+        db.products.getAll(),
+        db.customers.getAll()
       ]);
-      if (sRes.ok) setSales(await sRes.json());
-      if (prodRes.ok) setProducts(await prodRes.json());
-      if (custRes.ok) setCustomers(await custRes.json());
+      setSales(sData);
+      setProducts(prodData.map((p: any) => ({ ...p, current_stock: p.stock })));
+      setCustomers(custData);
     } catch (error) {
       toast.error('Failed to load data');
     } finally {
@@ -147,30 +148,21 @@ const Sales: React.FC = () => {
       }
     }
 
-    const formData = new FormData();
-    formData.append('invoice_number', invoiceNumber);
-    formData.append('date', date);
-    formData.append('customer_id', customerId);
-    formData.append('transport_cost', transportCost);
-    formData.append('items', JSON.stringify(items));
-    if (selectedFile) formData.append('image', selectedFile);
-
     try {
-      const res = await fetch('/api/sales', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.message || 'Failed to record sale');
+      await db.sales.create({
+        invoice_number: invoiceNumber,
+        date,
+        customer_id: parseInt(customerId),
+        transport_cost: parseFloat(transportCost || '0'),
+        total_amount: calculateTotal()
+      }, items);
 
       toast.success('Sale recorded successfully');
       setIsModalOpen(false);
       resetForm();
       fetchData();
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(error.message || 'Failed to record sale');
     }
   };
 
@@ -373,7 +365,7 @@ const Sales: React.FC = () => {
                   <div className="space-y-2">
                     <label className="label-caps ml-1">Invoice Number</label>
                     <div className="relative">
-                      <FileText className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <FileText className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
                       <input
                         required
                         className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
@@ -386,7 +378,7 @@ const Sales: React.FC = () => {
                   <div className="space-y-2">
                     <label className="label-caps ml-1">Dispatch Date</label>
                     <div className="relative">
-                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
                       <input
                         required
                         type="date"
@@ -399,10 +391,10 @@ const Sales: React.FC = () => {
                   <div className="space-y-2">
                     <label className="label-caps ml-1">Select Customer</label>
                     <div className="relative">
-                      <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
                       <select
                         required
-                        className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none appearance-none transition-all"
+                        className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                         value={customerId}
                         onChange={(e) => setCustomerId(e.target.value)}
                       >

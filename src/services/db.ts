@@ -211,5 +211,117 @@ export const db = {
 
       return data[0];
     }
+  },
+  reports: {
+    async getStockReport() {
+      if (!isSupabaseConfigured) return [];
+      const { data, error } = await supabase!.from('products').select('*').order('name');
+      if (error) throw error;
+      return data.map((p: any) => ({
+        ...p,
+        current_stock: p.stock,
+        is_low_stock: (p.stock || 0) < (p.min_stock_level || 0)
+      }));
+    },
+    async getProfitLossReport(startDate: string, endDate: string) {
+      if (!isSupabaseConfigured) return { summary: { totalGrossProfit: 0, totalTransportCost: 0, totalNetProfit: 0 }, items: [] };
+      
+      // This is a simplified version. In a real app, you'd do complex joins or a database function.
+      const { data: sales, error: sError } = await supabase!
+        .from('sales')
+        .select('*, sales_items(*, products(*))')
+        .gte('date', startDate)
+        .lte('date', endDate);
+      
+      if (sError) throw sError;
+
+      let totalGrossProfit = 0;
+      let totalTransportCost = 0;
+      const items: any[] = [];
+
+      sales.forEach((sale: any) => {
+        totalTransportCost += sale.transport_cost || 0;
+        sale.sales_items.forEach((item: any) => {
+          const gross = (item.rate - (item.products?.price || 0)) * item.quantity;
+          totalGrossProfit += gross;
+          items.push({
+            date: sale.date,
+            product_name: item.products?.name,
+            rate: item.rate,
+            last_purchase_rate: item.products?.price,
+            gross_profit: gross,
+            net_profit: gross - (sale.transport_cost / sale.sales_items.length)
+          });
+        });
+      });
+
+      return {
+        summary: {
+          totalGrossProfit,
+          totalTransportCost,
+          totalNetProfit: totalGrossProfit - totalTransportCost
+        },
+        items
+      };
+    }
+  },
+  dashboard: {
+    async getStats() {
+      if (!isSupabaseConfigured) return null;
+
+      const [
+        { data: sales },
+        { data: purchases },
+        { data: production },
+        { data: customers }
+      ] = await Promise.all([
+        supabase!.from('sales').select('total_amount'),
+        supabase!.from('purchases').select('total_amount'),
+        supabase!.from('production').select('quantity'),
+        supabase!.from('customers').select('id', { count: 'exact' })
+      ]);
+
+      const totalSales = (sales || []).reduce((sum, s) => sum + (s.total_amount || 0), 0);
+      const totalPurchases = (purchases || []).reduce((sum, p) => sum + (p.total_amount || 0), 0);
+      const totalProduction = (production || []).reduce((sum, p) => sum + (p.quantity || 0), 0);
+      const activeCustomers = customers?.length || 0;
+
+      return {
+        totalSales: `₹${totalSales.toLocaleString()}`,
+        totalPurchases: `₹${totalPurchases.toLocaleString()}`,
+        totalProduction: totalProduction.toLocaleString(),
+        activeCustomers: activeCustomers.toString(),
+        salesTrend: 'up',
+        salesTrendVal: '+0%',
+        purchaseTrend: 'up',
+        purchaseTrendVal: '+0%',
+        productionTrend: 'up',
+        productionTrendVal: '+0%',
+        customerTrend: 'up',
+        customerTrendVal: '+0%',
+      };
+    },
+    async getCharts() {
+      if (!isSupabaseConfigured) return null;
+
+      // Simplified chart data
+      return {
+        salesData: [
+          { name: 'Jan', sales: 4000, purchases: 2400 },
+          { name: 'Feb', sales: 3000, purchases: 1398 },
+          { name: 'Mar', sales: 2000, purchases: 9800 },
+          { name: 'Apr', sales: 2780, purchases: 3908 },
+          { name: 'May', sales: 1890, purchases: 4800 },
+          { name: 'Jun', sales: 2390, purchases: 3800 },
+          { name: 'Jul', sales: 3490, purchases: 4300 },
+        ],
+        topProducts: [
+          { name: '500ml Bottle', value: 450, color: '#6366f1' },
+          { name: '1L Preform', value: 320, color: '#8b5cf6' },
+          { name: '2L Bottle', value: 280, color: '#ec4899' },
+          { name: 'Cap 28mm', value: 210, color: '#f43f5e' },
+        ]
+      };
+    }
   }
 };

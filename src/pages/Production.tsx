@@ -16,6 +16,7 @@ import {
   ArrowUpRight,
   History
 } from 'lucide-react';
+import { db } from '../services/db';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -71,12 +72,12 @@ const Production: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const [eRes, pRes] = await Promise.all([
-        fetch('/api/production', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('/api/products', { headers: { 'Authorization': `Bearer ${token}` } })
+      const [eData, pData] = await Promise.all([
+        db.production.getAll(),
+        db.products.getAll()
       ]);
-      if (eRes.ok) setEntries(await eRes.json());
-      if (pRes.ok) setProducts(await pRes.json());
+      setEntries(eData);
+      setProducts(pData.map((p: any) => ({ ...p, current_stock: p.stock })));
     } catch (error) {
       toast.error('Failed to load data');
     } finally {
@@ -108,29 +109,19 @@ const Production: React.FC = () => {
     }
 
     try {
-      const res = await fetch('/api/production', {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          date,
-          preform_product_id: parseInt(preformId),
-          bottle_product_id: parseInt(bottleId),
-          quantity: parseFloat(quantity)
-        })
+      await db.production.create({
+        date,
+        preform_product_id: parseInt(preformId),
+        bottle_product_id: parseInt(bottleId),
+        quantity: parseFloat(quantity)
       });
-
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.message || 'Failed to record production');
 
       toast.success('Production recorded successfully');
       setIsModalOpen(false);
       resetForm();
       fetchData();
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(error.message || 'Failed to record production');
     }
   };
 
@@ -338,7 +329,7 @@ const Production: React.FC = () => {
                 <div className="space-y-2">
                   <label className="label-caps ml-1">Production Date</label>
                   <div className="relative">
-                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
                     <input
                       required
                       type="date"
@@ -354,7 +345,7 @@ const Production: React.FC = () => {
                     <label className="label-caps ml-1">Source Preform</label>
                     <select
                       required
-                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none appearance-none transition-all"
+                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                       value={preformId}
                       onChange={(e) => setPreformId(e.target.value)}
                     >
@@ -375,7 +366,7 @@ const Production: React.FC = () => {
                     <label className="label-caps ml-1">Resulting Bottle</label>
                     <select
                       required
-                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none appearance-none transition-all"
+                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                       value={bottleId}
                       onChange={(e) => setBottleId(e.target.value)}
                     >
@@ -390,7 +381,7 @@ const Production: React.FC = () => {
                 <div className="space-y-2">
                   <label className="label-caps ml-1">Quantity Produced (PCS)</label>
                   <div className="relative">
-                    <Factory className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <Factory className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
                     <input
                       required
                       type="number"

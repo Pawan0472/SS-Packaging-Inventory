@@ -28,6 +28,7 @@ import {
   Cell
 } from 'recharts';
 import { motion } from 'framer-motion';
+import { db } from '../services/db';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../utils/cn';
 import { toast } from 'react-hot-toast';
@@ -65,44 +66,60 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // In a real app, fetch from Supabase/API
-    // For now, providing beautiful mock data for immediate "wow" factor
-    setTimeout(() => {
-      setStats({
-        totalSales: '₹12,45,600',
-        totalPurchases: '₹8,12,300',
-        totalProduction: '45,200',
-        activeCustomers: '124',
-        salesTrend: 'up',
-        salesTrendVal: '+12.5%',
-        purchaseTrend: 'down',
-        purchaseTrendVal: '-4.2%',
-        productionTrend: 'up',
-        productionTrendVal: '+8.1%',
-        customerTrend: 'up',
-        customerTrendVal: '+2.4%',
-      });
+    const fetchData = async () => {
+      if (isDemo) {
+        setStats({
+          totalSales: '₹12,45,600',
+          totalPurchases: '₹8,12,300',
+          totalProduction: '45,200',
+          activeCustomers: '124',
+          salesTrend: 'up',
+          salesTrendVal: '+12.5%',
+          purchaseTrend: 'down',
+          purchaseTrendVal: '-4.2%',
+          productionTrend: 'up',
+          productionTrendVal: '+8.1%',
+          customerTrend: 'up',
+          customerTrendVal: '+2.4%',
+        });
 
-      setCharts({
-        salesData: [
-          { name: 'Jan', sales: 4000, purchases: 2400 },
-          { name: 'Feb', sales: 3000, purchases: 1398 },
-          { name: 'Mar', sales: 2000, purchases: 9800 },
-          { name: 'Apr', sales: 2780, purchases: 3908 },
-          { name: 'May', sales: 1890, purchases: 4800 },
-          { name: 'Jun', sales: 2390, purchases: 3800 },
-          { name: 'Jul', sales: 3490, purchases: 4300 },
-        ],
-        topProducts: [
-          { name: '500ml Bottle', value: 450, color: '#6366f1' },
-          { name: '1L Preform', value: 320, color: '#8b5cf6' },
-          { name: '2L Bottle', value: 280, color: '#ec4899' },
-          { name: 'Cap 28mm', value: 210, color: '#f43f5e' },
-        ]
-      });
-      setLoading(false);
-    }, 800);
-  }, []);
+        setCharts({
+          salesData: [
+            { name: 'Jan', sales: 4000, purchases: 2400 },
+            { name: 'Feb', sales: 3000, purchases: 1398 },
+            { name: 'Mar', sales: 2000, purchases: 9800 },
+            { name: 'Apr', sales: 2780, purchases: 3908 },
+            { name: 'May', sales: 1890, purchases: 4800 },
+            { name: 'Jun', sales: 2390, purchases: 3800 },
+            { name: 'Jul', sales: 3490, purchases: 4300 },
+          ],
+          topProducts: [
+            { name: '500ml Bottle', value: 450, color: '#6366f1' },
+            { name: '1L Preform', value: 320, color: '#8b5cf6' },
+            { name: '2L Bottle', value: 280, color: '#ec4899' },
+            { name: 'Cap 28mm', value: 210, color: '#f43f5e' },
+          ]
+        });
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const [sData, cData] = await Promise.all([
+          db.dashboard.getStats(),
+          db.dashboard.getCharts()
+        ]);
+        setStats(sData);
+        setCharts(cData);
+      } catch (error) {
+        toast.error('Failed to load dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [isDemo]);
 
   const handleShare = async () => {
     if (navigator.share) {

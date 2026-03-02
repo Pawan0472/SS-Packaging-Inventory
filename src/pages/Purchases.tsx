@@ -21,6 +21,7 @@ import {
   MoreVertical,
   ExternalLink
 } from 'lucide-react';
+import { db } from '../services/db';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -96,14 +97,14 @@ const Purchases: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const [pRes, prodRes, supRes] = await Promise.all([
-        fetch('/api/purchases', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('/api/products', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('/api/suppliers', { headers: { 'Authorization': `Bearer ${token}` } })
+      const [pData, prodData, supData] = await Promise.all([
+        db.purchases.getAll(),
+        db.products.getAll(),
+        db.suppliers.getAll()
       ]);
-      if (pRes.ok) setPurchases(await pRes.json());
-      if (prodRes.ok) setProducts(await prodRes.json());
-      if (supRes.ok) setSuppliers(await supRes.json());
+      setPurchases(pData);
+      setProducts(prodData);
+      setSuppliers(supData);
     } catch (error) {
       toast.error('Failed to load data');
     } finally {
@@ -140,30 +141,21 @@ const Purchases: React.FC = () => {
       return toast.error('Please fill all required fields');
     }
 
-    const formData = new FormData();
-    formData.append('invoice_number', invoiceNumber);
-    formData.append('date', date);
-    formData.append('supplier_id', supplierId);
-    formData.append('transport_cost', transportCost);
-    formData.append('items', JSON.stringify(items));
-    if (selectedFile) formData.append('image', selectedFile);
-
     try {
-      const res = await fetch('/api/purchases', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.message || 'Failed to record purchase');
+      await db.purchases.create({
+        invoice_number: invoiceNumber,
+        date,
+        supplier_id: parseInt(supplierId),
+        transport_cost: parseFloat(transportCost || '0'),
+        total_amount: calculateTotal()
+      }, items);
 
       toast.success('Purchase recorded successfully');
       setIsModalOpen(false);
       resetForm();
       fetchData();
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(error.message || 'Failed to record purchase');
     }
   };
 
@@ -366,7 +358,7 @@ const Purchases: React.FC = () => {
                   <div className="space-y-2">
                     <label className="label-caps ml-1">Invoice Number</label>
                     <div className="relative">
-                      <FileText className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <FileText className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
                       <input
                         required
                         className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
@@ -379,7 +371,7 @@ const Purchases: React.FC = () => {
                   <div className="space-y-2">
                     <label className="label-caps ml-1">Purchase Date</label>
                     <div className="relative">
-                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
                       <input
                         required
                         type="date"
@@ -392,10 +384,10 @@ const Purchases: React.FC = () => {
                   <div className="space-y-2">
                     <label className="label-caps ml-1">Select Supplier</label>
                     <div className="relative">
-                      <Truck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <Truck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
                       <select
                         required
-                        className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none appearance-none transition-all"
+                        className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                         value={supplierId}
                         onChange={(e) => setSupplierId(e.target.value)}
                       >
