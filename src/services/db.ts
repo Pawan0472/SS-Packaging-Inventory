@@ -2,6 +2,15 @@ import { supabase } from '../lib/supabase';
 
 export const db = {
 
+  // ================= AUDIT =================
+  audit: {
+    async log(user_email: string, action: string, module: string, record_id: number) {
+      await supabase.from('audit_logs').insert([
+        { user_email, action, module, record_id }
+      ]);
+    }
+  },
+
   // ================= PRODUCTS =================
   products: {
     async getAll() {
@@ -9,111 +18,88 @@ export const db = {
         .from('products')
         .select('*')
         .order('name');
-      if (error) throw error;
-      return data || [];
-    },
 
-    async create(product: any) {
-      const { data, error } = await supabase
-        .from('products')
-        .insert([{ ...product, stock: 0 }])
-        .select();
       if (error) throw error;
-      return data?.[0];
-    },
-
-    async update(id: number, updates: any) {
-      const { data, error } = await supabase
-        .from('products')
-        .update(updates)
-        .eq('id', id)
-        .select();
-      if (error) throw error;
-      return data?.[0];
-    },
-
-    async delete(id: number) {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
-      return true;
-    }
-  },
-
-  // ================= SUPPLIERS =================
-  suppliers: {
-    async getAll() {
-      const { data, error } = await supabase
-        .from('suppliers')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      return data || [];
-    }
-  },
-
-  // ================= CUSTOMERS =================
-  customers: {
-    async getAll() {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      return data || [];
+      return data;
     }
   },
 
   // ================= PURCHASES =================
   purchases: {
+
     async getAll() {
       const { data, error } = await supabase
         .from('purchases')
         .select('*, suppliers(name)')
+        .eq('is_deleted', false)
         .order('date', { ascending: false });
 
       if (error) throw error;
 
-      return (data || []).map((p: any) => ({
+      return data.map((p: any) => ({
         ...p,
         supplier_name: p.suppliers?.name
       }));
     },
 
+    async getById(id: number) {
+      const { data: purchase, error: pError } = await supabase
+        .from('purchases')
+        .select('*, suppliers(name)')
+        .eq('id', id)
+        .single();
+
+      if (pError) throw pError;
+
+      const { data: items, error: iError } = await supabase
+        .from('purchase_items')
+        .select('*, products(name)')
+        .eq('purchase_id', id);
+
+      if (iError) throw iError;
+
+      return {
+        ...purchase,
+        supplier_name: purchase.suppliers?.name,
+        items: items.map((item: any) => ({
+          ...item,
+          product_name: item.products?.name,
+          total: item.quantity * item.rate
+        }))
+      };
+    },
+
     async create(purchase: any, items: any[]) {
+
       const { data: purchaseData, error: pError } = await supabase
         .from('purchases')
-        .insert([purchase])
+        .insert([{ ...purchase, is_deleted: false }])
         .select();
 
       if (pError) throw pError;
-      const purchaseId = purchaseData![0].id;
+
+      const purchaseId = purchaseData[0].id;
 
       const itemsToInsert = items.map(item => ({
         ...item,
         purchase_id: purchaseId
       }));
 
-      const { error: iError } = await supabase
-        .from('purchase_items')
-        .insert(itemsToInsert);
-
-      if (iError) throw iError;
+      await supabase.from('purchase_items').insert(itemsToInsert);
 
       for (const item of items) {
-        const { error } = await supabase.rpc('increment_stock', {
-          product_id: Number(item.product_id),
-          amount: Number(item.quantity)
+        await supabase.rpc('increment_stock', {
+          product_id: item.product_id,
+          amount: item.quantity
         });
-        if (error) throw error;
       }
 
-      return purchaseData![0];
+      return purchaseData[0];
     },
 
-    async delete(id: number) {
+    async softDelete(id: number, userEmail: string) {
+
+      // Reverse stock
       const { data: items } = await supabase
         .from('purchase_items')
         .select('*')
@@ -126,119 +112,103 @@ export const db = {
         });
       }
 
-      const { error } = await supabase
+      // Mark as deleted
+      await supabase
         .from('purchases')
-        .delete()
+        .update({ is_deleted: true })
         .eq('id', id);
 
-      if (error) throw error;
+      await db.audit.log(userEmail, 'SOFT_DELETE', 'PURCHASE', id);
+
       return true;
     }
   },
 
   // ================= SALES =================
   sales: {
-    async create(sale: any, items: any[]) {
-      const { data: saleData, error: sError } = await supabase
+
+    async getAll() {
+      const { data, error } = await supabase
         .from('sales')
-        .insert([sale])
-        .select();
+        .select('*, customers(name)')
+        .eq('is_deleted', false)
+        .order('date', { ascending: false });
 
-      if (sError) throw sError;
-      const saleId = saleData![0].id;
+      if (error) throw error;
 
-      const itemsToInsert = items.map(item => ({
-        ...item,
-        sale_id: saleId
+      return data.map((s: any) => ({
+        ...s,
+        customer_name: s.customers?.name
       }));
+    },
 
-      const { error: iError } = await supabase
+    async softDelete(id: number, userEmail: string) {
+
+      const { data: items } = await supabase
         .from('sales_items')
-        .insert(itemsToInsert);
+        .select('*')
+        .eq('sale_id', id);
 
-      if (iError) throw iError;
-
-      for (const item of items) {
-        const { error } = await supabase.rpc('decrement_stock', {
-          product_id: Number(item.product_id),
-          amount: Number(item.quantity)
+      for (const item of items || []) {
+        await supabase.rpc('increment_stock', {
+          product_id: item.product_id,
+          amount: item.quantity
         });
-        if (error) throw error;
       }
 
-      return saleData![0];
+      await supabase
+        .from('sales')
+        .update({ is_deleted: true })
+        .eq('id', id);
+
+      await db.audit.log(userEmail, 'SOFT_DELETE', 'SALE', id);
+
+      return true;
     }
   },
 
   // ================= PRODUCTION =================
   production: {
+
     async getAll() {
       const { data, error } = await supabase
         .from('production')
-        .select('*, preform:products!preform_product_id(name), bottle:products!bottle_product_id(name)')
+        .select('*')
+        .eq('is_deleted', false)
         .order('date', { ascending: false });
 
       if (error) throw error;
-
-      return (data || []).map((e: any) => ({
-        ...e,
-        preform_name: e.preform?.name,
-        bottle_name: e.bottle?.name
-      }));
-    }
-  },
-
-  // ================= DASHBOARD =================
-  dashboard: {
-
-    async getStats() {
-      const [
-        { data: sales },
-        { data: purchases },
-        { data: production },
-        { count: customerCount }
-      ] = await Promise.all([
-        supabase.from('sales').select('total_amount'),
-        supabase.from('purchases').select('total_amount'),
-        supabase.from('production').select('quantity'),
-        supabase.from('customers').select('*', { count: 'exact', head: true })
-      ]);
-
-      const totalSales = (sales || []).reduce((sum: number, s: any) => sum + (s.total_amount || 0), 0);
-      const totalPurchases = (purchases || []).reduce((sum: number, p: any) => sum + (p.total_amount || 0), 0);
-      const totalProduction = (production || []).reduce((sum: number, p: any) => sum + (p.quantity || 0), 0);
-
-      return {
-        totalSales: `₹${totalSales.toLocaleString()}`,
-        totalPurchases: `₹${totalPurchases.toLocaleString()}`,
-        totalProduction: totalProduction.toLocaleString(),
-        activeCustomers: (customerCount || 0).toString(),
-        salesTrend: 'up',
-        salesTrendVal: '+0%',
-        purchaseTrend: 'up',
-        purchaseTrendVal: '+0%',
-        productionTrend: 'up',
-        productionTrendVal: '+0%',
-        customerTrend: 'up',
-        customerTrendVal: '+0%',
-      };
+      return data;
     },
 
-    async getCharts() {
-      const { data: salesData } = await supabase
-        .from('sales')
-        .select('date,total_amount')
-        .order('date', { ascending: true })
-        .limit(7);
+    async softDelete(id: number, userEmail: string) {
 
-      return {
-        salesData: (salesData || []).map((s: any) => ({
-          name: new Date(s.date).toLocaleDateString('en-IN', { month: 'short' }),
-          sales: s.total_amount,
-          purchases: 0
-        })),
-        topProducts: []
-      };
+      const { data: entry } = await supabase
+        .from('production')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (!entry) throw new Error('Production not found');
+
+      await supabase.rpc('increment_stock', {
+        product_id: entry.preform_product_id,
+        amount: entry.quantity
+      });
+
+      await supabase.rpc('decrement_stock', {
+        product_id: entry.bottle_product_id,
+        amount: entry.quantity
+      });
+
+      await supabase
+        .from('production')
+        .update({ is_deleted: true })
+        .eq('id', id);
+
+      await db.audit.log(userEmail, 'SOFT_DELETE', 'PRODUCTION', id);
+
+      return true;
     }
   }
 };

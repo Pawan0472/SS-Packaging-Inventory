@@ -649,4 +649,27 @@ const Sales: React.FC = () => {
   );
 };
 
+
+async delete(id: number, userEmail: string) {
+
+  const { data: items } = await supabase
+    .from('sales_items')
+    .select('*')
+    .eq('sale_id', id);
+
+  for (const item of items || []) {
+    await supabase.rpc('increment_stock', {
+      product_id: item.product_id,
+      amount: item.quantity
+    });
+  }
+
+  await supabase.from('sales_items').delete().eq('sale_id', id);
+  await supabase.from('sales').delete().eq('id', id);
+
+  await db.audit.log(userEmail, 'DELETE', 'SALE', id);
+
+  return true;
+}
+
 export default Sales;

@@ -423,4 +423,34 @@ const Production: React.FC = () => {
   );
 };
 
+
+
+async delete(id: number, userEmail: string) {
+
+  const { data: entry } = await supabase
+    .from('production')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (!entry) throw new Error('Production not found');
+
+  // Reverse stock
+  await supabase.rpc('increment_stock', {
+    product_id: entry.preform_product_id,
+    amount: entry.quantity
+  });
+
+  await supabase.rpc('decrement_stock', {
+    product_id: entry.bottle_product_id,
+    amount: entry.quantity
+  });
+
+  await supabase.from('production').delete().eq('id', id);
+
+  await db.audit.log(userEmail, 'DELETE', 'PRODUCTION', id);
+
+  return true;
+}
+
 export default Production;
