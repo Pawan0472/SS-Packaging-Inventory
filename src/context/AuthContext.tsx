@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 interface User {
   id: string | number;
   username: string;
+  email: string;
   role: 'admin' | 'manager' | 'staff';
 }
 
@@ -43,11 +44,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const { data: { session } } = await supabase.auth.getSession();
           if (session) {
             setToken(session.access_token);
-            setUser({
-              id: session.user.id,
-              username: session.user.email?.split('@')[0] || 'User',
-              role: (session.user.user_metadata?.role as any) || 'staff'
-            });
+           setUser({
+  id: session.user.id,
+  username: session.user.email?.split('@')[0] || 'User',
+  email: session.user.email || '',
+  role: (session.user.user_metadata?.role as any) || 'staff'
+});f
             setIsDemo(false);
           }
         }
@@ -77,7 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('erp_token');
     localStorage.removeItem('erp_user');
     navigate('/login');
-  };
+  };  
 
   return (
     <AuthContext.Provider value={{ user, token, login, logout, isLoading, isDemo }}>
