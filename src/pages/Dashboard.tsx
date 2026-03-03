@@ -161,13 +161,15 @@ const Dashboard = () => {
     toast.success('Report exported as CSV');
   };
 
-  if (loading) return (
+  if (loading || !stats || !charts) {
+  return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-pulse">
       {[1, 2, 3, 4].map(i => (
         <div key={i} className="h-32 bg-slate-200 rounded-2xl"></div>
       ))}
     </div>
   );
+}
 
   return (
     <div className="space-y-8">

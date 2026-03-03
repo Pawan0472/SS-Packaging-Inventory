@@ -1,11 +1,11 @@
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 export const db = {
 
   // ================= PRODUCTS =================
   products: {
     async getAll() {
-      const { data, error } = await supabase!
+      const { data, error } = await supabase
         .from('products')
         .select('*')
         .order('name');
@@ -14,7 +14,7 @@ export const db = {
     },
 
     async create(product: any) {
-      const { data, error } = await supabase!
+      const { data, error } = await supabase
         .from('products')
         .insert([{ ...product, stock: 0 }])
         .select();
@@ -23,7 +23,7 @@ export const db = {
     },
 
     async update(id: number, updates: any) {
-      const { data, error } = await supabase!
+      const { data, error } = await supabase
         .from('products')
         .update(updates)
         .eq('id', id)
@@ -33,7 +33,7 @@ export const db = {
     },
 
     async delete(id: number) {
-      const { error } = await supabase!
+      const { error } = await supabase
         .from('products')
         .delete()
         .eq('id', id);
@@ -45,7 +45,7 @@ export const db = {
   // ================= SUPPLIERS =================
   suppliers: {
     async getAll() {
-      const { data, error } = await supabase!
+      const { data, error } = await supabase
         .from('suppliers')
         .select('*')
         .order('name');
@@ -57,7 +57,7 @@ export const db = {
   // ================= CUSTOMERS =================
   customers: {
     async getAll() {
-      const { data, error } = await supabase!
+      const { data, error } = await supabase
         .from('customers')
         .select('*')
         .order('name');
@@ -69,7 +69,7 @@ export const db = {
   // ================= PURCHASES =================
   purchases: {
     async getAll() {
-      const { data, error } = await supabase!
+      const { data, error } = await supabase
         .from('purchases')
         .select('*, suppliers(name)')
         .order('date', { ascending: false });
@@ -83,7 +83,7 @@ export const db = {
     },
 
     async create(purchase: any, items: any[]) {
-      const { data: purchaseData, error: pError } = await supabase!
+      const { data: purchaseData, error: pError } = await supabase
         .from('purchases')
         .insert([purchase])
         .select();
@@ -96,14 +96,14 @@ export const db = {
         purchase_id: purchaseId
       }));
 
-      const { error: iError } = await supabase!
+      const { error: iError } = await supabase
         .from('purchase_items')
         .insert(itemsToInsert);
 
       if (iError) throw iError;
 
       for (const item of items) {
-        const { error } = await supabase!.rpc('increment_stock', {
+        const { error } = await supabase.rpc('increment_stock', {
           product_id: Number(item.product_id),
           amount: Number(item.quantity)
         });
@@ -114,59 +114,32 @@ export const db = {
     },
 
     async delete(id: number) {
-      const { data: items } = await supabase!
+      const { data: items } = await supabase
         .from('purchase_items')
         .select('*')
         .eq('purchase_id', id);
 
       for (const item of items || []) {
-        await supabase!.rpc('decrement_stock', {
+        await supabase.rpc('decrement_stock', {
           product_id: item.product_id,
           amount: item.quantity
         });
       }
 
-      const { error } = await supabase!
+      const { error } = await supabase
         .from('purchases')
         .delete()
         .eq('id', id);
 
       if (error) throw error;
       return true;
-    },
-
-    async getById(id: number) {
-      const { data: purchase, error: pError } = await supabase!
-        .from('purchases')
-        .select('*, suppliers(name)')
-        .eq('id', id)
-        .single();
-
-      if (pError) throw pError;
-
-      const { data: items, error: iError } = await supabase!
-        .from('purchase_items')
-        .select('*, products(name)')
-        .eq('purchase_id', id);
-
-      if (iError) throw iError;
-
-      return {
-        ...purchase,
-        supplier_name: purchase.suppliers?.name,
-        items: (items || []).map((item: any) => ({
-          ...item,
-          product_name: item.products?.name,
-          total: item.quantity * item.rate
-        }))
-      };
     }
   },
 
   // ================= SALES =================
   sales: {
     async create(sale: any, items: any[]) {
-      const { data: saleData, error: sError } = await supabase!
+      const { data: saleData, error: sError } = await supabase
         .from('sales')
         .insert([sale])
         .select();
@@ -179,14 +152,14 @@ export const db = {
         sale_id: saleId
       }));
 
-      const { error: iError } = await supabase!
+      const { error: iError } = await supabase
         .from('sales_items')
         .insert(itemsToInsert);
 
       if (iError) throw iError;
 
       for (const item of items) {
-        const { error } = await supabase!.rpc('decrement_stock', {
+        const { error } = await supabase.rpc('decrement_stock', {
           product_id: Number(item.product_id),
           amount: Number(item.quantity)
         });
@@ -200,7 +173,7 @@ export const db = {
   // ================= PRODUCTION =================
   production: {
     async getAll() {
-      const { data, error } = await supabase!
+      const { data, error } = await supabase
         .from('production')
         .select('*, preform:products!preform_product_id(name), bottle:products!bottle_product_id(name)')
         .order('date', { ascending: false });
@@ -217,55 +190,55 @@ export const db = {
 
   // ================= DASHBOARD =================
   dashboard: {
+
     async getStats() {
-      try {
-        const [
-          { data: sales },
-          { data: purchases },
-          { data: production },
-          { count: customerCount }
-        ] = await Promise.all([
-          supabase!.from('sales').select('total_amount'),
-          supabase!.from('purchases').select('total_amount'),
-          supabase!.from('production').select('quantity'),
-          supabase!.from('customers').select('*', { count: 'exact', head: true })
-        ]);
+      const [
+        { data: sales },
+        { data: purchases },
+        { data: production },
+        { count: customerCount }
+      ] = await Promise.all([
+        supabase.from('sales').select('total_amount'),
+        supabase.from('purchases').select('total_amount'),
+        supabase.from('production').select('quantity'),
+        supabase.from('customers').select('*', { count: 'exact', head: true })
+      ]);
 
-        const totalSales = (sales || []).reduce((sum, s) => sum + (s.total_amount || 0), 0);
-        const totalPurchases = (purchases || []).reduce((sum, p) => sum + (p.total_amount || 0), 0);
-        const totalProduction = (production || []).reduce((sum, p) => sum + (p.quantity || 0), 0);
+      const totalSales = (sales || []).reduce((sum: number, s: any) => sum + (s.total_amount || 0), 0);
+      const totalPurchases = (purchases || []).reduce((sum: number, p: any) => sum + (p.total_amount || 0), 0);
+      const totalProduction = (production || []).reduce((sum: number, p: any) => sum + (p.quantity || 0), 0);
 
-        return {
-          totalSales: `₹${totalSales.toLocaleString()}`,
-          totalPurchases: `₹${totalPurchases.toLocaleString()}`,
-          totalProduction: totalProduction.toLocaleString(),
-          activeCustomers: (customerCount || 0).toString(),
-          salesTrend: 'up',
-          salesTrendVal: '+0%',
-          purchaseTrend: 'up',
-          purchaseTrendVal: '+0%',
-          productionTrend: 'up',
-          productionTrendVal: '+0%',
-          customerTrend: 'up',
-          customerTrendVal: '+0%',
-        };
-      } catch (error) {
-        console.error(error);
-        return {
-          totalSales: "₹0",
-          totalPurchases: "₹0",
-          totalProduction: "0",
-          activeCustomers: "0",
-          salesTrend: 'up',
-          salesTrendVal: '+0%',
-          purchaseTrend: 'up',
-          purchaseTrendVal: '+0%',
-          productionTrend: 'up',
-          productionTrendVal: '+0%',
-          customerTrend: 'up',
-          customerTrendVal: '+0%',
-        };
-      }
+      return {
+        totalSales: `₹${totalSales.toLocaleString()}`,
+        totalPurchases: `₹${totalPurchases.toLocaleString()}`,
+        totalProduction: totalProduction.toLocaleString(),
+        activeCustomers: (customerCount || 0).toString(),
+        salesTrend: 'up',
+        salesTrendVal: '+0%',
+        purchaseTrend: 'up',
+        purchaseTrendVal: '+0%',
+        productionTrend: 'up',
+        productionTrendVal: '+0%',
+        customerTrend: 'up',
+        customerTrendVal: '+0%',
+      };
+    },
+
+    async getCharts() {
+      const { data: salesData } = await supabase
+        .from('sales')
+        .select('date,total_amount')
+        .order('date', { ascending: true })
+        .limit(7);
+
+      return {
+        salesData: (salesData || []).map((s: any) => ({
+          name: new Date(s.date).toLocaleDateString('en-IN', { month: 'short' }),
+          sales: s.total_amount,
+          purchases: 0
+        })),
+        topProducts: []
+      };
     }
   }
 };
