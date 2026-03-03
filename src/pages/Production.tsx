@@ -30,7 +30,7 @@ const Production = () => {
     if (!confirm("Delete this production entry?")) return;
 
     try {
-      await db.production.softDelete(id, user.email);
+      await db.production.softDelete(id, user?.email ?? '');
       toast.success("Production deleted");
       fetchData();
     } catch {

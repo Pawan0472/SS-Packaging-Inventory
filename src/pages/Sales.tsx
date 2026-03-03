@@ -30,7 +30,7 @@ const Sales = () => {
     if (!confirm("Delete this sale?")) return;
 
     try {
-      await db.sales.softDelete(id, user.email);
+      await db.sales.softDelete(id, user?.email ?? '');
       toast.success("Sale deleted");
       fetchData();
     } catch {

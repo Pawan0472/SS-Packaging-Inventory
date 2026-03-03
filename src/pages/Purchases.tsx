@@ -67,7 +67,7 @@ const Purchases: React.FC = () => {
     if (!confirm('This will reverse stock and hide this purchase. Continue?')) return;
 
     try {
-      await db.purchases.softDelete(id, user.email);
+      await db.purchases.softDelete(id, user?.email ?? '');
       toast.success('Purchase deleted');
       fetchData();
     } catch (error) {
