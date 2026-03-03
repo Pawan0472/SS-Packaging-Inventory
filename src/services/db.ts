@@ -99,7 +99,6 @@ export const db = {
 
     async softDelete(id: number, userEmail: string) {
 
-      // Reverse stock
       const { data: items } = await supabase
         .from('purchase_items')
         .select('*')
@@ -112,7 +111,6 @@ export const db = {
         });
       }
 
-      // Mark as deleted
       await supabase
         .from('purchases')
         .update({ is_deleted: true })
