@@ -135,23 +135,54 @@ const Purchases: React.FC = () => {
   };
 
   const calculateTotal = () => {
-    return items.reduce((sum, item) => sum + (item.quantity * item.rate), 0) + parseFloat(transportCost || '0');
+    return items.reduce((sum, item) => {
+      const product = products.find(p => p.id === item.product_id);
+      if (product?.category === 'Preform' && item.weight_kg) {
+        return sum + (item.weight_kg * item.rate);
+      }
+      return sum + (item.quantity * item.rate);
+    }, 0) + parseFloat(transportCost || '0');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!supplierId || items.some(i => !i.product_id || !i.quantity || !i.rate)) {
+    if (!supplierId || items.some(i => !i.product_id || (!i.quantity && !i.weight_kg) || !i.rate)) {
       return toast.error('Please fill all required fields');
     }
 
     try {
+      const processedItems = items.map(item => {
+        const product = products.find(p => p.id === item.product_id);
+        if (product?.category === 'Preform' && item.weight_kg) {
+          const gramWeight = typeof (product as any).gram_weight === 'string' 
+            ? parseFloat((product as any).gram_weight) 
+            : (product as any).gram_weight || 0;
+          
+          if (gramWeight > 0) {
+            const qtyPcs = Math.floor((item.weight_kg * 1000) / gramWeight);
+            const totalItemAmount = item.weight_kg * item.rate;
+            const ratePerPiece = totalItemAmount / qtyPcs;
+            return {
+              product_id: item.product_id,
+              quantity: qtyPcs,
+              rate: ratePerPiece
+            };
+          }
+        }
+        return {
+          product_id: item.product_id,
+          quantity: item.quantity,
+          rate: item.rate
+        };
+      });
+
       await db.purchases.create({
         invoice_number: invoiceNumber,
         date,
         supplier_id: parseInt(supplierId),
         transport_cost: parseFloat(transportCost || '0'),
         total_amount: calculateTotal()
-      }, items, user?.email || 'system');
+      }, processedItems, user?.email || 'system');
 
       toast.success('Purchase recorded successfully');
       setIsModalOpen(false);
@@ -472,7 +503,9 @@ const Purchases: React.FC = () => {
                           </div>
                         )}
                         <div className="col-span-6 md:col-span-2">
-                          <label className="label-caps ml-1 mb-1 block">Rate (₹)</label>
+                          <label className="label-caps ml-1 mb-1 block">
+                            {products.find(p => p.id === item.product_id)?.category === 'Preform' ? 'Rate (per KG)' : 'Rate (₹)'}
+                          </label>
                           <input
                             required
                             type="number"
@@ -484,7 +517,13 @@ const Purchases: React.FC = () => {
                         <div className="col-span-10 md:col-span-2">
                           <label className="label-caps ml-1 mb-1 block">Subtotal</label>
                           <div className="px-4 py-2.5 text-sm font-bold text-slate-900 dark:text-white bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 data-value">
-                            ₹{(item.quantity * item.rate).toLocaleString()}
+                            ₹{(() => {
+                              const product = products.find(p => p.id === item.product_id);
+                              if (product?.category === 'Preform' && item.weight_kg) {
+                                return (item.weight_kg * item.rate).toLocaleString();
+                              }
+                              return (item.quantity * item.rate).toLocaleString();
+                            })()}
                           </div>
                         </div>
                         <div className="col-span-2 md:col-span-1 flex justify-end">
