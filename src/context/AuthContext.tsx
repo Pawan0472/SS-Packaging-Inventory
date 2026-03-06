@@ -10,6 +10,7 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   isDemo: boolean;
+  hasPermission: (moduleName: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,6 +21,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [isDemo, setIsDemo] = useState(false);
   const navigate = useNavigate();
+
+  const hasPermission = (moduleName: string) => {
+    if (!user) return false;
+    if (user.role === 'superadmin') return true;
+    if (!user.permissions) return true; // Default to all if not set (legacy)
+    return user.permissions.includes(moduleName);
+  };
 
   useEffect(() => {
     const initAuth = async () => {
@@ -95,7 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading, isDemo }}>
+    <AuthContext.Provider value={{ user, token, login, logout, isLoading, isDemo, hasPermission }}>
       {children}
     </AuthContext.Provider>
   );
