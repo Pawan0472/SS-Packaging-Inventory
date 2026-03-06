@@ -21,7 +21,7 @@ import { useTheme } from './context/ThemeContext';
 import ThemeToggle from './components/ThemeToggle';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from './utils/cn';
-import { seedDemoData } from './services/db';
+import { seedDemoData, setDemoMode } from './services/db';
 
 // Lazy load pages
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -299,6 +299,7 @@ const App = () => {
   const { isDemo } = useAuth();
 
   React.useEffect(() => {
+    setDemoMode(isDemo);
     if (isDemo) {
       seedDemoData();
     }

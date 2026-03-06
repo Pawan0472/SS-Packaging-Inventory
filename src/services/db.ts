@@ -1,7 +1,7 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 const logAction = async (userEmail: string, action: string, module: string, recordId: string) => {
-  if (!isSupabaseConfigured) return;
+  if (!isSupabaseConfigured || demoMode) return;
   try {
     await supabase!.from('audit_logs').insert([{
       user_email: userEmail,
@@ -54,20 +54,20 @@ export const seedDemoData = async () => {
   }
 };
 
+let demoMode = false;
+export const setDemoMode = (val: boolean) => { demoMode = val; };
+
 const safeCall = async (supabaseCall: () => Promise<any>, localStorageKey: string, filterFn?: (item: any) => boolean) => {
-  if (isSupabaseConfigured) {
+  if (isSupabaseConfigured && !demoMode) {
     try {
       const { data, error } = await supabaseCall();
       if (!error && data) {
-        // Apply filter even to Supabase data if provided
         const filteredData = filterFn ? data.filter(filterFn) : data;
-        // Update local cache with Supabase data
         setLocalStorage(localStorageKey, filteredData);
         return filteredData;
       }
-      console.warn(`Supabase call for ${localStorageKey} failed, falling back to local storage`, error);
     } catch (e) {
-      console.warn(`Supabase connection for ${localStorageKey} failed, falling back to local storage`, e);
+      console.warn(`Supabase connection for ${localStorageKey} failed`, e);
     }
   }
   const data = getLocalStorage(localStorageKey);
@@ -476,64 +476,75 @@ export const db = {
       }));
     },
     async create(purchase: any, items: any[], userEmail: string) {
-      if (!isSupabaseConfigured) {
-        const purchases = getLocalStorage('purchases');
-        const purchaseId = Date.now();
-        const newPurchase = { ...purchase, id: purchaseId, is_deleted: false };
-        purchases.push(newPurchase);
-        setLocalStorage('purchases', purchases);
+      let result;
+      if (isSupabaseConfigured && !demoMode) {
+        const { data: purchaseData, error: pError } = await supabase!
+          .from('purchases')
+          .insert([purchase])
+          .select();
+        
+        if (pError) throw pError;
+        result = purchaseData[0];
+        const purchaseId = result.id;
 
-        const purchaseItems = getLocalStorage('purchase_items');
-        items.forEach(item => {
-          purchaseItems.push({ ...item, id: Date.now() + Math.random(), purchase_id: purchaseId });
-          // Update stock locally
-          const products = getLocalStorage('products');
-          const pIdx = products.findIndex((p: any) => p.id === parseInt(item.product_id));
-          if (pIdx !== -1) {
-            products[pIdx].stock = (products[pIdx].stock || 0) + parseInt(item.quantity);
-            setLocalStorage('products', products);
-          }
-        });
-        setLocalStorage('purchase_items', purchaseItems);
-        return newPurchase;
-      }
-      
-      const { data: purchaseData, error: pError } = await supabase!
-        .from('purchases')
-        .insert([purchase])
-        .select();
-      
-      if (pError) throw pError;
-      const purchaseId = purchaseData[0].id;
+        const itemsToInsert = items.map(item => ({
+          ...item,
+          purchase_id: purchaseId
+        }));
+        
+        const { error: iError } = await supabase!
+          .from('purchase_items')
+          .insert(itemsToInsert);
+        
+        if (iError) throw iError;
 
-      const itemsToInsert = items.map(item => ({
-        ...item,
-        purchase_id: purchaseId
-      }));
-      
-      const { error: iError } = await supabase!
-        .from('purchase_items')
-        .insert(itemsToInsert);
-      
-      if (iError) throw iError;
-
-      for (const item of items) {
-        try {
-          await supabase!.rpc('increment_stock', { 
-            product_id: parseInt(item.product_id), 
-            amount: parseInt(item.quantity)
+        for (const item of items) {
+          const pid = parseInt(item.product_id);
+          const qty = parseInt(item.quantity);
+          const { error: rpcError } = await supabase!.rpc('increment_stock', { 
+            product_id: pid, 
+            amount: qty
           });
-        } catch (e) {
-          console.warn('RPC increment_stock failed, trying manual update', e);
-          const { data: p } = await supabase!.from('products').select('stock').eq('id', item.product_id).single();
-          if (p) {
-            await supabase!.from('products').update({ stock: (p.stock || 0) + parseInt(item.quantity) }).eq('id', item.product_id);
+
+          if (rpcError) {
+            console.warn('RPC increment_stock failed, trying manual update', rpcError);
+            const { data: p } = await supabase!.from('products').select('stock').eq('id', pid).single();
+            if (p) {
+              await supabase!.from('products').update({ stock: (p.stock || 0) + qty }).eq('id', pid);
+            }
           }
         }
+
+        await logAction(userEmail, 'CREATE', 'purchases', purchaseId.toString());
+      } else {
+        const purchaseId = Date.now();
+        result = { ...purchase, id: purchaseId, is_deleted: false, created_at: new Date().toISOString() };
       }
 
-      await logAction(userEmail, 'CREATE', 'purchases', purchaseId.toString());
-      return purchaseData[0];
+      // Always update local storage for consistency
+      const purchases = getLocalStorage('purchases');
+      purchases.push(result);
+      setLocalStorage('purchases', purchases);
+
+      const purchaseItems = getLocalStorage('purchase_items');
+      const products = getLocalStorage('products');
+      
+      items.forEach(item => {
+        const pid = parseInt(item.product_id);
+        const qty = parseInt(item.quantity);
+        
+        purchaseItems.push({ ...item, id: Date.now() + Math.random(), purchase_id: result.id });
+        
+        const pIdx = products.findIndex((p: any) => p.id === pid);
+        if (pIdx !== -1) {
+          products[pIdx].stock = (products[pIdx].stock || 0) + qty;
+        }
+      });
+      
+      setLocalStorage('purchase_items', purchaseItems);
+      setLocalStorage('products', products);
+      
+      return result;
     },
     async getById(id: number) {
       if (!isSupabaseConfigured) {
@@ -628,64 +639,75 @@ export const db = {
       }));
     },
     async create(sale: any, items: any[], userEmail: string) {
-      if (!isSupabaseConfigured) {
-        const sales = getLocalStorage('sales');
-        const saleId = Date.now();
-        const newSale = { ...sale, id: saleId, is_deleted: false };
-        sales.push(newSale);
-        setLocalStorage('sales', sales);
+      let result;
+      if (isSupabaseConfigured && !demoMode) {
+        const { data: saleData, error: sError } = await supabase!
+          .from('sales')
+          .insert([sale])
+          .select();
+        
+        if (sError) throw sError;
+        result = saleData[0];
+        const saleId = result.id;
 
-        const saleItems = getLocalStorage('sales_items');
-        items.forEach(item => {
-          saleItems.push({ ...item, id: Date.now() + Math.random(), sale_id: saleId });
-          // Update stock locally
-          const products = getLocalStorage('products');
-          const pIdx = products.findIndex((p: any) => p.id === parseInt(item.product_id));
-          if (pIdx !== -1) {
-            products[pIdx].stock = (products[pIdx].stock || 0) - parseInt(item.quantity);
-            setLocalStorage('products', products);
-          }
-        });
-        setLocalStorage('sales_items', saleItems);
-        return newSale;
-      }
-      
-      const { data: saleData, error: sError } = await supabase!
-        .from('sales')
-        .insert([sale])
-        .select();
-      
-      if (sError) throw sError;
-      const saleId = saleData[0].id;
+        const itemsToInsert = items.map(item => ({
+          ...item,
+          sale_id: saleId
+        }));
+        
+        const { error: iError } = await supabase!
+          .from('sales_items')
+          .insert(itemsToInsert);
+        
+        if (iError) throw iError;
 
-      const itemsToInsert = items.map(item => ({
-        ...item,
-        sale_id: saleId
-      }));
-      
-      const { error: iError } = await supabase!
-        .from('sales_items')
-        .insert(itemsToInsert);
-      
-      if (iError) throw iError;
-
-      for (const item of items) {
-        try {
-          await supabase!.rpc('decrement_stock', { 
-            product_id: parseInt(item.product_id), 
-            amount: parseInt(item.quantity)
+        for (const item of items) {
+          const pid = parseInt(item.product_id);
+          const qty = parseInt(item.quantity);
+          const { error: rpcError } = await supabase!.rpc('decrement_stock', { 
+            product_id: pid, 
+            amount: qty
           });
-        } catch (e) {
-          console.warn('RPC decrement_stock failed, trying manual update', e);
-          const { data: p } = await supabase!.from('products').select('stock').eq('id', item.product_id).single();
-          if (p) {
-            await supabase!.from('products').update({ stock: Math.max(0, (p.stock || 0) - parseInt(item.quantity)) }).eq('id', item.product_id);
+
+          if (rpcError) {
+            console.warn('RPC decrement_stock failed, trying manual update', rpcError);
+            const { data: p } = await supabase!.from('products').select('stock').eq('id', pid).single();
+            if (p) {
+              await supabase!.from('products').update({ stock: Math.max(0, (p.stock || 0) - qty) }).eq('id', pid);
+            }
           }
         }
+
+        await logAction(userEmail, 'CREATE', 'sales', saleId.toString());
+      } else {
+        const saleId = Date.now();
+        result = { ...sale, id: saleId, is_deleted: false, created_at: new Date().toISOString() };
       }
 
-      await logAction(userEmail, 'CREATE', 'sales', saleId.toString());
-      return saleData[0];
+      // Always update local storage for consistency
+      const sales = getLocalStorage('sales');
+      sales.push(result);
+      setLocalStorage('sales', sales);
+
+      const saleItems = getLocalStorage('sales_items');
+      const products = getLocalStorage('products');
+      
+      items.forEach(item => {
+        const pid = parseInt(item.product_id);
+        const qty = parseInt(item.quantity);
+        
+        saleItems.push({ ...item, id: Date.now() + Math.random(), sale_id: result.id });
+        
+        const pIdx = products.findIndex((p: any) => p.id === pid);
+        if (pIdx !== -1) {
+          products[pIdx].stock = (products[pIdx].stock || 0) - qty;
+        }
+      });
+      
+      setLocalStorage('sales_items', saleItems);
+      setLocalStorage('products', products);
+      
+      return result;
     },
     async getById(id: number) {
       if (!isSupabaseConfigured) {
@@ -781,58 +803,62 @@ export const db = {
       }));
     },
     async create(entry: any, userEmail: string) {
-      if (!isSupabaseConfigured) {
-        const items = getLocalStorage('production');
-        const newItem = { ...entry, id: Date.now(), is_deleted: false };
-        items.push(newItem);
-        setLocalStorage('production', items);
+      let result;
+      if (isSupabaseConfigured && !demoMode) {
+        const { data, error } = await supabase!
+          .from('production')
+          .insert([entry])
+          .select();
+        
+        if (error) throw error;
+        result = data[0];
 
-        // Update stock locally
-        const products = getLocalStorage('products');
-        const preformIdx = products.findIndex((p: any) => p.id === entry.preform_product_id);
-        const bottleIdx = products.findIndex((p: any) => p.id === entry.bottle_product_id);
-        if (preformIdx !== -1) products[preformIdx].stock = (products[preformIdx].stock || 0) - entry.quantity;
-        if (bottleIdx !== -1) products[bottleIdx].stock = (products[bottleIdx].stock || 0) + entry.quantity;
-        setLocalStorage('products', products);
+        const preformPid = parseInt(entry.preform_product_id);
+        const bottlePid = parseInt(entry.bottle_product_id);
+        const qty = parseInt(entry.quantity);
 
-        return newItem;
-      }
-      
-      const { data, error } = await supabase!
-        .from('production')
-        .insert([entry])
-        .select();
-      
-      if (error) throw error;
-
-      try {
-        await supabase!.rpc('decrement_stock', { 
-          product_id: entry.preform_product_id, 
-          amount: entry.quantity 
+        const { error: decError } = await supabase!.rpc('decrement_stock', { 
+          product_id: preformPid, 
+          amount: qty 
         });
-      } catch (e) {
-        console.warn('RPC decrement_stock failed, trying manual update', e);
-        const { data: p } = await supabase!.from('products').select('stock').eq('id', entry.preform_product_id).single();
-        if (p) {
-          await supabase!.from('products').update({ stock: Math.max(0, (p.stock || 0) - entry.quantity) }).eq('id', entry.preform_product_id);
+        if (decError) {
+          console.warn('RPC decrement_stock failed, trying manual update', decError);
+          const { data: p } = await supabase!.from('products').select('stock').eq('id', preformPid).single();
+          if (p) {
+            await supabase!.from('products').update({ stock: Math.max(0, (p.stock || 0) - qty) }).eq('id', preformPid);
+          }
         }
-      }
 
-      try {
-        await supabase!.rpc('increment_stock', { 
-          product_id: entry.bottle_product_id, 
-          amount: entry.quantity 
+        const { error: incError } = await supabase!.rpc('increment_stock', { 
+          product_id: bottlePid, 
+          amount: qty 
         });
-      } catch (e) {
-        console.warn('RPC increment_stock failed, trying manual update', e);
-        const { data: p } = await supabase!.from('products').select('stock').eq('id', entry.bottle_product_id).single();
-        if (p) {
-          await supabase!.from('products').update({ stock: (p.stock || 0) + entry.quantity }).eq('id', entry.bottle_product_id);
+        if (incError) {
+          console.warn('RPC increment_stock failed, trying manual update', incError);
+          const { data: p } = await supabase!.from('products').select('stock').eq('id', bottlePid).single();
+          if (p) {
+            await supabase!.from('products').update({ stock: (p.stock || 0) + qty }).eq('id', bottlePid);
+          }
         }
+
+        await logAction(userEmail, 'CREATE', 'production', result.id.toString());
+      } else {
+        result = { ...entry, id: Date.now(), is_deleted: false, created_at: new Date().toISOString() };
       }
 
-      await logAction(userEmail, 'CREATE', 'production', data[0].id.toString());
-      return data[0];
+      // Always update local storage for consistency
+      const items = getLocalStorage('production');
+      items.push(result);
+      setLocalStorage('production', items);
+
+      const products = getLocalStorage('products');
+      const preformIdx = products.findIndex((p: any) => p.id === parseInt(entry.preform_product_id));
+      const bottleIdx = products.findIndex((p: any) => p.id === parseInt(entry.bottle_product_id));
+      if (preformIdx !== -1) products[preformIdx].stock = (products[preformIdx].stock || 0) - parseInt(entry.quantity);
+      if (bottleIdx !== -1) products[bottleIdx].stock = (products[bottleIdx].stock || 0) + parseInt(entry.quantity);
+      setLocalStorage('products', products);
+
+      return result;
     },
     async softDelete(id: number, userEmail: string) {
       if (!isSupabaseConfigured) {
@@ -886,14 +912,16 @@ export const db = {
     },
     async create(adjustment: any, userEmail: string) {
       const { product_id, type, quantity, reason } = adjustment;
-      const amount = type === 'Add' ? parseInt(quantity) : -parseInt(quantity);
+      const pid = parseInt(product_id);
+      const qty = parseInt(quantity);
+      const amount = type === 'Add' ? qty : -qty;
 
       let result;
-      if (isSupabaseConfigured) {
+      if (isSupabaseConfigured && !demoMode) {
         const { data, error } = await supabase!.from('stock_adjustments').insert([{
-          product_id,
+          product_id: pid,
           type,
-          quantity: parseInt(quantity),
+          quantity: qty,
           reason,
           user_email: userEmail
         }]).select();
@@ -902,17 +930,15 @@ export const db = {
         result = data[0];
 
         // Update product stock using RPC for atomicity with manual fallback
-        try {
-          if (amount > 0) {
-            await supabase!.rpc('increment_stock', { product_id, amount });
-          } else {
-            await supabase!.rpc('decrement_stock', { product_id, amount: Math.abs(amount) });
-          }
-        } catch (e) {
-          console.warn('RPC stock update failed, trying manual update', e);
-          const { data: p } = await supabase!.from('products').select('stock').eq('id', product_id).single();
+        const { error: rpcError } = amount > 0 
+          ? await supabase!.rpc('increment_stock', { product_id: pid, amount })
+          : await supabase!.rpc('decrement_stock', { product_id: pid, amount: Math.abs(amount) });
+
+        if (rpcError) {
+          console.warn('RPC stock update failed, trying manual update', rpcError);
+          const { data: p } = await supabase!.from('products').select('stock').eq('id', pid).single();
           if (p) {
-            await supabase!.from('products').update({ stock: (p.stock || 0) + amount }).eq('id', product_id);
+            await supabase!.from('products').update({ stock: (p.stock || 0) + amount }).eq('id', pid);
           }
         }
         
@@ -921,13 +947,13 @@ export const db = {
         result = { ...adjustment, id: Date.now(), created_at: new Date().toISOString(), user_email: userEmail };
       }
 
-      // Update local storage
+      // Always update local storage for consistency
       const adjustments = getLocalStorage('stock_adjustments');
       adjustments.push(result);
       setLocalStorage('stock_adjustments', adjustments);
 
       const products = getLocalStorage('products');
-      const pIdx = products.findIndex((p: any) => p.id === parseInt(product_id));
+      const pIdx = products.findIndex((p: any) => p.id === pid);
       if (pIdx !== -1) {
         products[pIdx].stock = (products[pIdx].stock || 0) + amount;
         setLocalStorage('products', products);
