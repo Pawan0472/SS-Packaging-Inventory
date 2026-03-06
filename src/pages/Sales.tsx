@@ -116,7 +116,10 @@ const Sales: React.FC = () => {
     // Stock Validation
     for (const item of items) {
       const product = products.find(p => p.id === item.product_id);
-      if (product && product.current_stock < item.quantity) {
+      if (!product) {
+        return toast.error(`Product not found for one of the items`);
+      }
+      if (product.current_stock < item.quantity) {
         return toast.error(`Insufficient stock for ${product.name}. Available: ${product.current_stock}`);
       }
     }

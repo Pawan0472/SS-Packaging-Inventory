@@ -38,23 +38,12 @@ const Reports: React.FC = () => {
   const { token, isDemo } = useAuth();
 
   const fetchStockReport = async () => {
-    if (isDemo) {
-      setStockData([
-        { id: 1, name: '500ml PET Bottle', category: 'Bottle', min_stock_level: 5000, current_stock: 12500, is_low_stock: false },
-        { id: 2, name: '1L PET Preform', category: 'Preform', min_stock_level: 10000, current_stock: 4200, is_low_stock: true },
-        { id: 3, name: '2L PET Bottle', category: 'Bottle', min_stock_level: 2000, current_stock: 8900, is_low_stock: false },
-        { id: 4, name: '18g Preform Blue', category: 'Preform', min_stock_level: 5000, current_stock: 15000, is_low_stock: false },
-        { id: 5, name: '24g Preform Clear', category: 'Preform', min_stock_level: 5000, current_stock: 2100, is_low_stock: true },
-      ]);
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
     try {
       const data = await db.reports.getStockReport();
       setStockData(data);
     } catch (error) {
+      console.error('Failed to load stock report', error);
       toast.error('Failed to load stock report');
     } finally {
       setIsLoading(false);
@@ -62,28 +51,12 @@ const Reports: React.FC = () => {
   };
 
   const fetchProfitReport = async () => {
-    if (isDemo) {
-      setProfitData({
-        summary: {
-          totalGrossProfit: 245000,
-          totalTransportCost: 12500,
-          totalNetProfit: 232500
-        },
-        items: [
-          { date: '2024-03-22', product_name: '500ml PET Bottle', rate: 4.50, last_purchase_rate: 3.20, gross_profit: 6500, net_profit: 6200 },
-          { date: '2024-03-23', product_name: '1L PET Preform', rate: 8.20, last_purchase_rate: 6.50, gross_profit: 12000, net_profit: 11500 },
-          { date: '2024-03-24', product_name: '2L PET Bottle', rate: 12.00, last_purchase_rate: 9.80, gross_profit: 8500, net_profit: 8100 },
-        ]
-      });
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
     try {
       const data = await db.reports.getProfitLossReport(startDate, endDate);
       setProfitData(data);
     } catch (error) {
+      console.error('Failed to load profit report', error);
       toast.error('Failed to load profit report');
     } finally {
       setIsLoading(false);

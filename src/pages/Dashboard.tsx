@@ -34,6 +34,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { cn } from '../utils/cn';
 import { toast } from 'react-hot-toast';
+import { format } from 'date-fns';
 
 const StatCard = ({ label, value, trend, trendValue, icon: Icon, color }: any) => (
   <motion.div 
@@ -64,83 +65,55 @@ const StatCard = ({ label, value, trend, trendValue, icon: Icon, color }: any) =
 const Dashboard = () => {
   const { isDemo } = useAuth();
   const { theme } = useTheme();
-  const [stats, setStats] = useState<any>({
-    totalSales: '₹0',
-    totalPurchases: '₹0',
-    totalProduction: '0',
-    activeCustomers: '0',
-    totalLeads: '0',
-    pipelineValue: '₹0',
-    salesTrend: 'up',
-    salesTrendVal: '+0%',
-    purchaseTrend: 'up',
-    purchaseTrendVal: '+0%',
-    productionTrend: 'up',
-    productionTrendVal: '+0%',
-    customerTrend: 'up',
-    customerTrendVal: '+0%',
-    leadsTrend: 'up',
-    leadsTrendVal: '+0%',
-  });
-  const [charts, setCharts] = useState<any>({
-    salesData: [],
-    topProducts: []
-  });
+  const [stats, setStats] = useState<any>(null);
+  const [charts, setCharts] = useState<any>(null);
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [inventoryAlerts, setInventoryAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
-      if (isDemo) {
-        setStats({
-          totalSales: '₹12,45,600',
-          totalPurchases: '₹8,12,300',
-          totalProduction: '45,200',
-          activeCustomers: '124',
-          totalLeads: '45',
-          pipelineValue: '₹25,00,000',
-          salesTrend: 'up',
-          salesTrendVal: '+12.5%',
-          purchaseTrend: 'down',
-          purchaseTrendVal: '-4.2%',
-          productionTrend: 'up',
-          productionTrendVal: '+8.1%',
-          customerTrend: 'up',
-          customerTrendVal: '+2.4%',
-          leadsTrend: 'up',
-          leadsTrendVal: '+15%',
-        });
-
-        setCharts({
-          salesData: [
-            { name: 'Jan', sales: 4000, purchases: 2400 },
-            { name: 'Feb', sales: 3000, purchases: 1398 },
-            { name: 'Mar', sales: 2000, purchases: 9800 },
-            { name: 'Apr', sales: 2780, purchases: 3908 },
-            { name: 'May', sales: 1890, purchases: 4800 },
-            { name: 'Jun', sales: 2390, purchases: 3800 },
-            { name: 'Jul', sales: 3490, purchases: 4300 },
-          ],
-          topProducts: [
-            { name: '500ml Bottle', value: 450, color: '#6366f1' },
-            { name: '1L Preform', value: 320, color: '#8b5cf6' },
-            { name: '2L Bottle', value: 280, color: '#ec4899' },
-            { name: 'Cap 28mm', value: 210, color: '#f43f5e' },
-          ]
-        });
-        setLoading(false);
-        return;
-      }
-
+      setLoading(true);
       try {
-        const [sData, cData] = await Promise.all([
+        const [sData, cData, sales, purchases, production, products] = await Promise.all([
           db.dashboard.getStats(),
-          db.dashboard.getCharts()
+          db.dashboard.getCharts(),
+          db.sales.getAll(),
+          db.purchases.getAll(),
+          db.production.getAll(),
+          db.products.getAll()
         ]);
-        if (sData) setStats(sData);
-        if (cData) setCharts(cData);
+        
+        setStats(sData);
+        setCharts(cData);
+
+        // Process Recent Activity
+        const activity = [
+          ...sales.map((s: any) => ({ ...s, type: 'sale', title: `Invoice #${s.invoice_number}`, subtitle: s.customer_name, amount: `+₹${s.total_amount.toLocaleString()}`, icon: TrendingUp, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10' })),
+          ...purchases.map((p: any) => ({ ...p, type: 'purchase', title: `PO #${p.invoice_number}`, subtitle: p.supplier_name, amount: `-₹${p.total_amount.toLocaleString()}`, icon: ShoppingCart, color: 'text-rose-600 bg-rose-50 dark:bg-rose-500/10' })),
+          ...production.map((pr: any) => ({ ...pr, type: 'production', title: `Batch #${pr.id}`, subtitle: pr.bottle_name, amount: `${pr.quantity.toLocaleString()} units`, icon: Factory, color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10' }))
+        ].sort((a, b) => new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime())
+         .slice(0, 5);
+        
+        setRecentActivity(activity);
+
+        // Process Inventory Alerts
+        const alerts = products
+          .filter((p: any) => p.stock <= p.min_stock_level)
+          .map((p: any) => ({
+            product: p.name,
+            status: p.stock === 0 ? 'Critical' : 'Low Stock',
+            stock: p.stock.toLocaleString(),
+            min: p.min_stock_level.toLocaleString(),
+            color: p.stock === 0 ? 'bg-rose-500 dark:bg-rose-400' : 'bg-amber-500 dark:bg-amber-400'
+          }))
+          .slice(0, 5);
+        
+        setInventoryAlerts(alerts);
+
       } catch (error) {
         console.error('Failed to load dashboard data', error);
-        // Stats are already initialized with default values
+        toast.error('Failed to load dashboard data');
       } finally {
         setLoading(false);
       }
@@ -412,29 +385,29 @@ const Dashboard = () => {
             <button className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline">View All</button>
           </div>
           <div className="space-y-4">
-            {[
-              { type: 'sale', title: 'Invoice #INV-2024-001', subtitle: 'Reliance Industries', amount: '+₹45,000', time: '2 mins ago', icon: TrendingUp, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10' },
-              { type: 'purchase', title: 'PO #PUR-2024-082', subtitle: 'Global Polymers', amount: '-₹1,20,000', time: '1 hour ago', icon: ShoppingCart, color: 'text-rose-600 bg-rose-50 dark:bg-rose-500/10' },
-              { type: 'production', title: 'Batch #PRD-991', subtitle: '1L Bottle Production', amount: '2,500 units', time: '3 hours ago', icon: Factory, color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10' },
-            ].map((item, i) => (
-              <div key={i} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer group">
-                <div className="flex items-center gap-4">
-                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", item.color)}>
-                    <item.icon size={20} />
+            {recentActivity.length === 0 ? (
+              <p className="text-center py-8 text-slate-400 dark:text-slate-600 font-medium">No recent activity</p>
+            ) : (
+              recentActivity.map((item, i) => (
+                <div key={i} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer group">
+                  <div className="flex items-center gap-4">
+                    <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", item.color)}>
+                      <item.icon size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{item.title}</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">{item.subtitle}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{item.title}</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">{item.subtitle}</p>
+                  <div className="text-right">
+                    <p className={cn("text-sm font-bold", item.type === 'sale' ? "text-emerald-600 dark:text-emerald-400" : item.type === 'purchase' ? "text-rose-600 dark:text-rose-400" : "text-slate-900 dark:text-white")}>
+                      {item.amount}
+                    </p>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">{item.date ? format(new Date(item.date), 'dd MMM') : 'Just now'}</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className={cn("text-sm font-bold", item.type === 'sale' ? "text-emerald-600 dark:text-emerald-400" : item.type === 'purchase' ? "text-rose-600 dark:text-rose-400" : "text-slate-900 dark:text-white")}>
-                    {item.amount}
-                  </p>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">{item.time}</p>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -444,31 +417,31 @@ const Dashboard = () => {
             <AlertCircle size={18} className="text-rose-500 dark:text-rose-400" />
           </div>
           <div className="space-y-4">
-            {[
-              { product: '28mm Blue Caps', status: 'Critical', stock: '1,200', min: '5,000', color: 'bg-rose-500 dark:bg-rose-400' },
-              { product: '1L PET Preforms', status: 'Low Stock', stock: '8,500', min: '10,000', color: 'bg-amber-500 dark:bg-amber-400' },
-              { product: '500ml Clear Bottles', status: 'Reorder', stock: '4,200', min: '5,000', color: 'bg-amber-500 dark:bg-amber-400' },
-            ].map((item, i) => (
-              <div key={i} className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-indigo-100 dark:hover:border-indigo-500/30 transition-all">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-bold text-slate-900 dark:text-white">{item.product}</span>
-                  <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full text-white uppercase tracking-wider", item.color)}>
-                    {item.status}
-                  </span>
+            {inventoryAlerts.length === 0 ? (
+              <p className="text-center py-8 text-slate-400 dark:text-slate-600 font-medium">All stock levels are healthy</p>
+            ) : (
+              inventoryAlerts.map((item, i) => (
+                <div key={i} className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-indigo-100 dark:hover:border-indigo-500/30 transition-all">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">{item.product}</span>
+                    <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full text-white uppercase tracking-wider", item.color)}>
+                      {item.status}
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(100, (parseInt(item.stock.replace(',','')) / Math.max(1, parseInt(item.min.replace(',','')))) * 100)}%` }}
+                      className={cn("h-full", item.color)}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-2">
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Stock: {item.stock}</span>
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Min: {item.min}</span>
+                  </div>
                 </div>
-                <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${(parseInt(item.stock.replace(',','')) / parseInt(item.min.replace(',',''))) * 100}%` }}
-                    className={cn("h-full", item.color)}
-                  />
-                </div>
-                <div className="flex justify-between mt-2">
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Stock: {item.stock}</span>
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Min: {item.min}</span>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

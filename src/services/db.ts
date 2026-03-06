@@ -59,9 +59,11 @@ const safeCall = async (supabaseCall: () => Promise<any>, localStorageKey: strin
     try {
       const { data, error } = await supabaseCall();
       if (!error && data) {
+        // Apply filter even to Supabase data if provided
+        const filteredData = filterFn ? data.filter(filterFn) : data;
         // Update local cache with Supabase data
-        setLocalStorage(localStorageKey, data);
-        return data;
+        setLocalStorage(localStorageKey, filteredData);
+        return filteredData;
       }
       console.warn(`Supabase call for ${localStorageKey} failed, falling back to local storage`, error);
     } catch (e) {
@@ -516,10 +518,18 @@ export const db = {
       if (iError) throw iError;
 
       for (const item of items) {
-        await supabase!.rpc('increment_stock', { 
-          product_id: parseInt(item.product_id), 
-          amount: parseInt(item.quantity)
-        });
+        try {
+          await supabase!.rpc('increment_stock', { 
+            product_id: parseInt(item.product_id), 
+            amount: parseInt(item.quantity)
+          });
+        } catch (e) {
+          console.warn('RPC increment_stock failed, trying manual update', e);
+          const { data: p } = await supabase!.from('products').select('stock').eq('id', item.product_id).single();
+          if (p) {
+            await supabase!.from('products').update({ stock: (p.stock || 0) + parseInt(item.quantity) }).eq('id', item.product_id);
+          }
+        }
       }
 
       await logAction(userEmail, 'CREATE', 'purchases', purchaseId.toString());
@@ -660,10 +670,18 @@ export const db = {
       if (iError) throw iError;
 
       for (const item of items) {
-        await supabase!.rpc('decrement_stock', { 
-          product_id: parseInt(item.product_id), 
-          amount: parseInt(item.quantity)
-        });
+        try {
+          await supabase!.rpc('decrement_stock', { 
+            product_id: parseInt(item.product_id), 
+            amount: parseInt(item.quantity)
+          });
+        } catch (e) {
+          console.warn('RPC decrement_stock failed, trying manual update', e);
+          const { data: p } = await supabase!.from('products').select('stock').eq('id', item.product_id).single();
+          if (p) {
+            await supabase!.from('products').update({ stock: Math.max(0, (p.stock || 0) - parseInt(item.quantity)) }).eq('id', item.product_id);
+          }
+        }
       }
 
       await logAction(userEmail, 'CREATE', 'sales', saleId.toString());
@@ -787,14 +805,31 @@ export const db = {
       
       if (error) throw error;
 
-      await supabase!.rpc('decrement_stock', { 
-        product_id: entry.preform_product_id, 
-        amount: entry.quantity 
-      });
-      await supabase!.rpc('increment_stock', { 
-        product_id: entry.bottle_product_id, 
-        amount: entry.quantity 
-      });
+      try {
+        await supabase!.rpc('decrement_stock', { 
+          product_id: entry.preform_product_id, 
+          amount: entry.quantity 
+        });
+      } catch (e) {
+        console.warn('RPC decrement_stock failed, trying manual update', e);
+        const { data: p } = await supabase!.from('products').select('stock').eq('id', entry.preform_product_id).single();
+        if (p) {
+          await supabase!.from('products').update({ stock: Math.max(0, (p.stock || 0) - entry.quantity) }).eq('id', entry.preform_product_id);
+        }
+      }
+
+      try {
+        await supabase!.rpc('increment_stock', { 
+          product_id: entry.bottle_product_id, 
+          amount: entry.quantity 
+        });
+      } catch (e) {
+        console.warn('RPC increment_stock failed, trying manual update', e);
+        const { data: p } = await supabase!.from('products').select('stock').eq('id', entry.bottle_product_id).single();
+        if (p) {
+          await supabase!.from('products').update({ stock: (p.stock || 0) + entry.quantity }).eq('id', entry.bottle_product_id);
+        }
+      }
 
       await logAction(userEmail, 'CREATE', 'production', data[0].id.toString());
       return data[0];
@@ -853,38 +888,52 @@ export const db = {
       const { product_id, type, quantity, reason } = adjustment;
       const amount = type === 'Add' ? parseInt(quantity) : -parseInt(quantity);
 
-      if (!isSupabaseConfigured) {
-        const adjustments = getLocalStorage('stock_adjustments');
-        const newAdjustment = { ...adjustment, id: Date.now(), created_at: new Date().toISOString(), user_email: userEmail };
-        adjustments.push(newAdjustment);
-        setLocalStorage('stock_adjustments', adjustments);
+      let result;
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase!.from('stock_adjustments').insert([{
+          product_id,
+          type,
+          quantity: parseInt(quantity),
+          reason,
+          user_email: userEmail
+        }]).select();
+        
+        if (error) throw error;
+        result = data[0];
 
-        const products = getLocalStorage('products');
-        const pIdx = products.findIndex((p: any) => p.id === parseInt(product_id));
-        if (pIdx !== -1) {
-          products[pIdx].stock = (products[pIdx].stock || 0) + amount;
-          setLocalStorage('products', products);
+        // Update product stock using RPC for atomicity with manual fallback
+        try {
+          if (amount > 0) {
+            await supabase!.rpc('increment_stock', { product_id, amount });
+          } else {
+            await supabase!.rpc('decrement_stock', { product_id, amount: Math.abs(amount) });
+          }
+        } catch (e) {
+          console.warn('RPC stock update failed, trying manual update', e);
+          const { data: p } = await supabase!.from('products').select('stock').eq('id', product_id).single();
+          if (p) {
+            await supabase!.from('products').update({ stock: (p.stock || 0) + amount }).eq('id', product_id);
+          }
         }
-        return newAdjustment;
+        
+        await logAction(userEmail, 'CREATE', 'stock_adjustments', result.id.toString());
+      } else {
+        result = { ...adjustment, id: Date.now(), created_at: new Date().toISOString(), user_email: userEmail };
       }
 
-      const { data, error } = await supabase!.from('stock_adjustments').insert([{
-        product_id,
-        type,
-        quantity: parseInt(quantity),
-        reason,
-        user_email: userEmail
-      }]).select();
+      // Update local storage
+      const adjustments = getLocalStorage('stock_adjustments');
+      adjustments.push(result);
+      setLocalStorage('stock_adjustments', adjustments);
+
+      const products = getLocalStorage('products');
+      const pIdx = products.findIndex((p: any) => p.id === parseInt(product_id));
+      if (pIdx !== -1) {
+        products[pIdx].stock = (products[pIdx].stock || 0) + amount;
+        setLocalStorage('products', products);
+      }
       
-      if (error) throw error;
-
-      const { data: product } = await supabase!.from('products').select('stock').eq('id', product_id).single();
-      if (product) {
-        await supabase!.from('products').update({ stock: (product.stock || 0) + amount }).eq('id', product_id);
-      }
-
-      await logAction(userEmail, 'CREATE', 'stock_adjustments', data[0].id.toString());
-      return data[0];
+      return result;
     }
   },
   dashboard: {
@@ -976,43 +1025,110 @@ export const db = {
       }
     },
     async getCharts() {
-      return {
-        salesData: [
-          { name: 'Jan', sales: 4000, purchases: 2400 },
-          { name: 'Feb', sales: 3000, purchases: 1398 },
-          { name: 'Mar', sales: 2000, purchases: 9800 },
-          { name: 'Apr', sales: 2780, purchases: 3908 },
-          { name: 'May', sales: 1890, purchases: 4800 },
-          { name: 'Jun', sales: 2390, purchases: 3800 },
-          { name: 'Jul', sales: 3490, purchases: 4300 },
-        ],
-        topProducts: [
-          { name: '500ml Bottle', value: 450, color: '#6366f1' },
-          { name: '1L Preform', value: 320, color: '#8b5cf6' },
-          { name: '2L Bottle', value: 280, color: '#ec4899' },
-          { name: 'Cap 28mm', value: 210, color: '#f43f5e' },
-        ]
+      const getLocalCharts = () => {
+        const sales = getLocalStorage('sales').filter((s: any) => !s.is_deleted);
+        const purchases = getLocalStorage('purchases').filter((p: any) => !p.is_deleted);
+        const products = getLocalStorage('products').filter((p: any) => !p.is_deleted);
+        const salesItems = getLocalStorage('sales_items');
+
+        // Last 6 months labels
+        const months = [];
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date();
+          d.setMonth(d.getMonth() - i);
+          months.push(d.toLocaleString('default', { month: 'short' }));
+        }
+
+        const salesData = months.map(m => ({
+          name: m,
+          sales: sales.filter((s: any) => new Date(s.date).toLocaleString('default', { month: 'short' }) === m)
+                      .reduce((sum: number, s: any) => sum + (s.total_amount || 0), 0),
+          purchases: purchases.filter((p: any) => new Date(p.date).toLocaleString('default', { month: 'short' }) === m)
+                            .reduce((sum: number, p: any) => sum + (p.total_amount || 0), 0)
+        }));
+
+        // Top products by sales quantity
+        const productSales: Record<number, number> = {};
+        salesItems.forEach((si: any) => {
+          productSales[si.product_id] = (productSales[si.product_id] || 0) + (si.quantity || 0);
+        });
+
+        const topProducts = Object.entries(productSales)
+          .map(([id, qty]) => {
+            const p = products.find((prod: any) => prod.id === parseInt(id));
+            return { name: p?.name || 'Unknown', value: qty };
+          })
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 4)
+          .map((p, i) => ({ ...p, color: ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e'][i] }));
+
+        return { salesData, topProducts };
       };
+
+      if (!isSupabaseConfigured) return getLocalCharts();
+
+      try {
+        const [
+          { data: sales, error: sErr },
+          { data: purchases, error: pErr },
+          { data: products, error: prErr },
+          { data: salesItems, error: siErr }
+        ] = await Promise.all([
+          supabase!.from('sales').select('total_amount, date').eq('is_deleted', false),
+          supabase!.from('purchases').select('total_amount, date').eq('is_deleted', false),
+          supabase!.from('products').select('id, name').eq('is_deleted', false),
+          supabase!.from('sales_items').select('product_id, quantity')
+        ]);
+
+        if (sErr || pErr || prErr || siErr) return getLocalCharts();
+
+        const months = [];
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date();
+          d.setMonth(d.getMonth() - i);
+          months.push(d.toLocaleString('default', { month: 'short' }));
+        }
+
+        const salesData = months.map(m => ({
+          name: m,
+          sales: (sales || []).filter(s => new Date(s.date).toLocaleString('default', { month: 'short' }) === m)
+                               .reduce((sum, s) => sum + (s.total_amount || 0), 0),
+          purchases: (purchases || []).filter(p => new Date(p.date).toLocaleString('default', { month: 'short' }) === m)
+                                     .reduce((sum, p) => sum + (p.total_amount || 0), 0)
+        }));
+
+        const productSales: Record<number, number> = {};
+        (salesItems || []).forEach(si => {
+          productSales[si.product_id] = (productSales[si.product_id] || 0) + (si.quantity || 0);
+        });
+
+        const topProducts = Object.entries(productSales)
+          .map(([id, qty]) => {
+            const p = (products || []).find(prod => prod.id === parseInt(id));
+            return { name: p?.name || 'Unknown', value: qty };
+          })
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 4)
+          .map((p, i) => ({ ...p, color: ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e'][i] }));
+
+        return { salesData, topProducts };
+      } catch (e) {
+        return getLocalCharts();
+      }
     }
   },
   reports: {
     async getStockReport() {
-      if (!isSupabaseConfigured) {
-        const products = getLocalStorage('products').filter((p: any) => !p.is_deleted);
-        return products.map((p: any) => ({
-          ...p,
-          is_low_stock: (p.stock || 0) <= (p.min_stock_level || 0)
-        }));
-      }
-      const { data, error } = await supabase!
-        .from('products')
-        .select('*')
-        .eq('is_deleted', false)
-        .order('stock', { ascending: true });
-      if (error) throw error;
-      return data.map(p => ({
+      const data = await safeCall(
+        async () => await supabase!.from('products').select('*').order('stock', { ascending: true }),
+        'products',
+        (p: any) => !p.is_deleted
+      );
+      
+      return (data || []).map((p: any) => ({
         ...p,
-        is_low_stock: p.stock <= p.min_stock_level
+        current_stock: p.stock || 0,
+        is_low_stock: (p.stock || 0) <= (p.min_stock_level || 0)
       }));
     },
     async getProfitLossReport(startDate: string, endDate: string) {
