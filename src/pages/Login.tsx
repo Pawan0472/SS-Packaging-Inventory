@@ -25,34 +25,19 @@ const Login: React.FC = () => {
   const onSubmit = async (data: FormValues) => {
     setIsLoading(true);
     
-    // 1. Try Local Users first (for custom access management)
-    try {
-      const { db } = await import('../services/db');
-      const localUsers = await db.users.getAll();
-      const localUser = localUsers.find((u: any) => 
-        (u.username === data.username || u.email === data.username) && 
-        u.password === data.password
-      );
-if (localUser) {
-  localUser.role = "super_admin";
-  localUser.permissions = ["all"];
-}
-      if (localUser) {
-        setTimeout(() => {
-          login('demo-token', { 
-            id: localUser.id, 
-            username: localUser.username, 
-            role: localUser.role,
-            email: localUser.email,
-            permissions: localUser.permissions
-          });
-          toast.success(`Welcome back, ${localUser.username}`);
-          setIsLoading(false);
-        }, 800);
-        return;
-      }
-    } catch (e) {
-      console.error('Local auth check failed', e);
+    // 1. Try Demo Login first for convenience
+    if (data.username === 'admin' && data.password === 'admin123') {
+      setTimeout(() => {
+        login('demo-token', { 
+          id: 'demo-1', 
+          username: 'Admin User', 
+          role: 'admin',
+          email: 'admin@example.com'
+        });
+        toast.success('Welcome to SS Packaging ERP Pro (Demo Mode)');
+        setIsLoading(false);
+      }, 1000);
+      return;
     }
 
     // 2. Real Supabase Auth (if configured)

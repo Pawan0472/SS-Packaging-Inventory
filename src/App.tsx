@@ -34,7 +34,6 @@ const Production = lazy(() => import('./pages/Production'));
 const Reports = lazy(() => import('./pages/Reports'));
 const DataManagement = lazy(() => import('./pages/DataManagement'));
 const AuditLogs = lazy(() => import('./pages/AuditLogs'));
-const UserManagement = lazy(() => import('./pages/UserManagement'));
 const Login = lazy(() => import('./pages/Login'));
 
 // CRM Pages
@@ -69,7 +68,7 @@ const SidebarItem = ({ to, icon: Icon, label, active }: any) => (
 );
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
-  const { user, logout, isDemo, hasPermission } = useAuth();
+  const { user, logout, isDemo } = useAuth();
   const { theme } = useTheme();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
@@ -78,50 +77,43 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     {
       title: 'General',
       items: [
-        { to: '/', icon: LayoutDashboard, label: 'Dashboard', id: 'dashboard' },
+        { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
       ]
     },
     {
       title: 'Inventory & Production',
       items: [
-        { to: '/products', icon: Package, label: 'Products', id: 'products' },
-        { to: '/stock-adjustment', icon: Database, label: 'Stock Adjustment', id: 'stock-adjustment' },
-        { to: '/production', icon: Factory, label: 'Production', id: 'production' },
-        { to: '/purchases', icon: ShoppingCart, label: 'Purchases', id: 'purchases' },
-        { to: '/sales', icon: TrendingUp, label: 'Sales', id: 'sales' },
+        { to: '/products', icon: Package, label: 'Products' },
+        { to: '/stock-adjustment', icon: Database, label: 'Stock Adjustment' },
+        { to: '/production', icon: Factory, label: 'Production' },
+        { to: '/purchases', icon: ShoppingCart, label: 'Purchases' },
+        { to: '/sales', icon: TrendingUp, label: 'Sales' },
       ]
     },
     {
       title: 'CRM',
       items: [
-        { to: '/leads', icon: Bell, label: 'Leads', id: 'crm' },
-        { to: '/opportunities', icon: TrendingUp, label: 'Opportunities', id: 'crm' },
-        { to: '/tasks', icon: History, label: 'Tasks', id: 'crm' },
-        { to: '/customers', icon: Users, label: 'Customers', id: 'customers' },
+        { to: '/leads', icon: Bell, label: 'Leads' },
+        { to: '/opportunities', icon: TrendingUp, label: 'Opportunities' },
+        { to: '/tasks', icon: History, label: 'Tasks' },
+        { to: '/customers', icon: Users, label: 'Customers' },
       ]
     },
     {
       title: 'Partners',
       items: [
-        { to: '/suppliers', icon: Users, label: 'Suppliers', id: 'suppliers' },
+        { to: '/suppliers', icon: Users, label: 'Suppliers' },
       ]
     },
     {
       title: 'System',
       items: [
-        { to: '/reports', icon: BarChart3, label: 'Reports', id: 'reports' },
-        { to: '/audit-logs', icon: History, label: 'Audit Logs', id: 'audit-logs' },
-        { to: '/data', icon: Database, label: 'Data Management', id: 'superadmin' },
-        { to: '/users', icon: Users, label: 'User Management', id: 'superadmin' },
+        { to: '/reports', icon: BarChart3, label: 'Reports' },
+        { to: '/audit-logs', icon: History, label: 'Audit Logs' },
+        { to: '/data', icon: Database, label: 'Data Management' },
       ]
     }
-  ].map(section => ({
-    ...section,
-    items: section.items.filter(item => {
-      if (item.id === 'superadmin') return user?.role === 'superadmin';
-      return hasPermission(item.id);
-    })
-  })).filter(section => section.items.length > 0);
+  ];
 
   return (
     <div className="flex min-h-screen bg-[#F8FAFC] dark:bg-slate-950 transition-colors duration-300">
@@ -294,15 +286,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-const PrivateRoute = ({ children, moduleId }: { children: React.ReactNode, moduleId?: string }) => {
-  const { user, isLoading, hasPermission } = useAuth();
+const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isLoading } = useAuth();
   
   if (isLoading) return null;
   if (!user) return <Navigate to="/login" />;
-  
-  if (moduleId && !hasPermission(moduleId)) {
-    return <Navigate to="/" />;
-  }
   
   return <Layout>{children}</Layout>;
 };
@@ -325,23 +313,22 @@ const App = () => {
         </Suspense>
       } />
       
-      <Route path="/" element={<PrivateRoute moduleId="dashboard"><Dashboard /></PrivateRoute>} />
-      <Route path="/products" element={<PrivateRoute moduleId="products"><Products /></PrivateRoute>} />
-      <Route path="/stock-adjustment" element={<PrivateRoute moduleId="stock-adjustment"><StockAdjustment /></PrivateRoute>} />
-      <Route path="/suppliers" element={<PrivateRoute moduleId="suppliers"><Suppliers /></PrivateRoute>} />
-      <Route path="/customers" element={<PrivateRoute moduleId="customers"><Customers /></PrivateRoute>} />
-      <Route path="/purchases" element={<PrivateRoute moduleId="purchases"><Purchases /></PrivateRoute>} />
-      <Route path="/sales" element={<PrivateRoute moduleId="sales"><Sales /></PrivateRoute>} />
-      <Route path="/production" element={<PrivateRoute moduleId="production"><Production /></PrivateRoute>} />
+      <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+      <Route path="/products" element={<PrivateRoute><Products /></PrivateRoute>} />
+      <Route path="/stock-adjustment" element={<PrivateRoute><StockAdjustment /></PrivateRoute>} />
+      <Route path="/suppliers" element={<PrivateRoute><Suppliers /></PrivateRoute>} />
+      <Route path="/customers" element={<PrivateRoute><Customers /></PrivateRoute>} />
+      <Route path="/purchases" element={<PrivateRoute><Purchases /></PrivateRoute>} />
+      <Route path="/sales" element={<PrivateRoute><Sales /></PrivateRoute>} />
+      <Route path="/production" element={<PrivateRoute><Production /></PrivateRoute>} />
       
       {/* CRM Routes */}
-      <Route path="/leads" element={<PrivateRoute moduleId="crm"><Leads /></PrivateRoute>} />
-      <Route path="/opportunities" element={<PrivateRoute moduleId="crm"><Opportunities /></PrivateRoute>} />
-      <Route path="/tasks" element={<PrivateRoute moduleId="crm"><Tasks /></PrivateRoute>} />
+      <Route path="/leads" element={<PrivateRoute><Leads /></PrivateRoute>} />
+      <Route path="/opportunities" element={<PrivateRoute><Opportunities /></PrivateRoute>} />
+      <Route path="/tasks" element={<PrivateRoute><Tasks /></PrivateRoute>} />
       
-      <Route path="/reports" element={<PrivateRoute moduleId="reports"><Reports /></PrivateRoute>} />
-      <Route path="/audit-logs" element={<PrivateRoute moduleId="audit-logs"><AuditLogs /></PrivateRoute>} />
-      <Route path="/users" element={<PrivateRoute><UserManagement /></PrivateRoute>} />
+      <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
+      <Route path="/audit-logs" element={<PrivateRoute><AuditLogs /></PrivateRoute>} />
       <Route path="/data" element={<PrivateRoute><DataManagement /></PrivateRoute>} />
       
       <Route path="*" element={<Navigate to="/" />} />

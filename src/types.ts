@@ -1,11 +1,10 @@
-export type UserRole = 'superadmin' | 'admin' | 'manager' | 'staff';
+export type UserRole = 'admin' | 'manager' | 'staff';
 
 export interface User {
   id: string;
   username: string;
   email: string;
   role: UserRole;
-  permissions?: string[]; // List of module names the user can access
 }
 
 export interface Product {
