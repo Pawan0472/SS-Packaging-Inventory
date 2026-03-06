@@ -1,12 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-interface User {
-  id: string | number;
-  username: string;
-  email: string;
-  role: 'admin' | 'manager' | 'staff';
-}
+import { User } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -44,14 +39,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const { data: { session } } = await supabase.auth.getSession();
           if (session) {
             setToken(session.access_token);
-           setUser({
-  id: session.user.id,
-  username: session.user.email?.split('@')[0] || 'User',
-  email: session.user.email || '',
-  role: (session.user.user_metadata?.role as any) || 'staff'
-});f
+            setUser({
+              id: session.user.id,
+              username: session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'User',
+              email: session.user.email || '',
+              role: (session.user.user_metadata?.role as any) || 'staff'
+            });
             setIsDemo(false);
           }
+
+          // Listen for auth changes
+          supabase.auth.onAuthStateChange((_event, session) => {
+            if (session) {
+              setToken(session.access_token);
+              setUser({
+                id: session.user.id,
+                username: session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'User',
+                email: session.user.email || '',
+                role: (session.user.user_metadata?.role as any) || 'staff'
+              });
+              setIsDemo(false);
+            } else {
+              setToken(null);
+              setUser(null);
+              setIsDemo(false);
+            }
+          });
         }
       } catch (e) {
         console.error('Supabase session check failed', e);
@@ -79,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('erp_token');
     localStorage.removeItem('erp_user');
     navigate('/login');
-  };  
+  };
 
   return (
     <AuthContext.Provider value={{ user, token, login, logout, isLoading, isDemo }}>

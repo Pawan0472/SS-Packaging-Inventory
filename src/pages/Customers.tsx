@@ -78,10 +78,10 @@ const Customers: React.FC = () => {
 
     try {
       if (editingCustomer) {
-        await db.customers.update(editingCustomer.id, formData);
+        await db.customers.update(editingCustomer.id, formData, user?.email || 'system');
         toast.success('Customer updated');
       } else {
-        await db.customers.create(formData);
+        await db.customers.create(formData, user?.email || 'system');
         toast.success('Customer created');
       }
       setIsModalOpen(false);
@@ -99,9 +99,9 @@ const Customers: React.FC = () => {
       return;
     }
 
-    if (!window.confirm('Are you sure?')) return;
+    if (!window.confirm('Are you sure? This will hide the customer from the list.')) return;
     try {
-      await db.customers.delete(id);
+      await db.customers.softDelete(id, user?.email || 'system');
       toast.success('Customer deleted');
       fetchCustomers();
     } catch (error) {
@@ -116,8 +116,8 @@ const Customers: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Customers</h2>
-          <p className="text-slate-500 mt-1">Manage your client relationships and accounts.</p>
+          <h2 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Customers</h2>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">Manage your client relationships and accounts.</p>
         </div>
         <button
           onClick={() => {
@@ -135,16 +135,16 @@ const Customers: React.FC = () => {
       {/* Filters & Search */}
       <div className="flex flex-col md:flex-row gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={20} />
           <input 
             type="text" 
             placeholder="Search customers by name, GST or location..." 
-            className="w-full pl-12 pr-6 py-4 rounded-2xl bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm"
+            className="w-full pl-12 pr-6 py-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button className="bg-white border border-slate-200 px-6 py-4 rounded-2xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2">
+        <button className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-6 py-4 rounded-2xl text-sm font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center gap-2">
           <Filter size={18} />
           <span>Filters</span>
         </button>
@@ -155,15 +155,15 @@ const Customers: React.FC = () => {
         <AnimatePresence mode="popLayout">
           {isLoading ? (
             [1, 2, 3].map(i => (
-              <div key={i} className="h-64 bg-slate-200 rounded-3xl animate-pulse"></div>
+              <div key={i} className="h-64 bg-slate-200 dark:bg-slate-800 rounded-3xl animate-pulse"></div>
             ))
           ) : filteredCustomers.length === 0 ? (
             <div className="col-span-full py-20 text-center bento-card">
-              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
+              <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400 dark:text-slate-600">
                 <Users size={32} />
               </div>
-              <h3 className="text-lg font-bold text-slate-900">No customers found</h3>
-              <p className="text-slate-500 mt-1">Try adjusting your search or add a new client.</p>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">No customers found</h3>
+              <p className="text-slate-500 dark:text-slate-400 mt-1">Try adjusting your search or add a new client.</p>
             </div>
           ) : (
             filteredCustomers.map((customer) => (
@@ -176,7 +176,7 @@ const Customers: React.FC = () => {
                 className="bento-card group"
               >
                 <div className="flex justify-between items-start mb-6">
-                  <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
+                  <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-500/10 rounded-2xl flex items-center justify-center text-indigo-600 dark:text-indigo-500 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
                     <UserCheck size={24} />
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
@@ -186,14 +186,14 @@ const Customers: React.FC = () => {
                         setFormData(customer);
                         setIsModalOpen(true);
                       }}
-                      className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl"
+                      className="p-2 text-slate-400 dark:text-slate-600 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-xl"
                     >
                       <Edit2 size={16} />
                     </button>
                     {user?.role === 'admin' && (
                       <button 
                         onClick={() => handleDelete(customer.id)}
-                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl"
+                        className="p-2 text-slate-400 dark:text-slate-600 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -201,35 +201,35 @@ const Customers: React.FC = () => {
                   </div>
                 </div>
 
-                <h3 className="text-xl font-bold text-slate-900 mb-6 group-hover:text-indigo-600 transition-colors">{customer.name}</h3>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{customer.name}</h3>
                 
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-600">
                       <Phone size={14} />
                     </div>
-                    <span className="text-sm font-medium text-slate-600">{customer.phone || 'No phone'}</span>
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">{customer.phone || 'No phone'}</span>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 shrink-0">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-600 shrink-0">
                       <MapPin size={14} />
                     </div>
-                    <span className="text-sm font-medium text-slate-600 line-clamp-2">{customer.address || 'No address'}</span>
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400 line-clamp-2">{customer.address || 'No address'}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-600">
                       <Hash size={14} />
                     </div>
                     <div className="flex flex-col">
                       <span className="label-caps">GST Number</span>
-                      <span className="text-xs font-bold text-slate-900 data-value">{customer.gst || 'N/A'}</span>
+                      <span className="text-xs font-bold text-slate-900 dark:text-white data-value">{customer.gst || 'N/A'}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Key Account</span>
-                  <button className="text-indigo-600 hover:underline flex items-center gap-1 text-xs font-bold">
+                <div className="mt-8 pt-6 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest">Key Account</span>
+                  <button className="text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 text-xs font-bold">
                     <span>Order History</span>
                     <ExternalLink size={12} />
                   </button>
@@ -255,14 +255,14 @@ const Customers: React.FC = () => {
               initial={{ opacity: 0, scale: 0.9, y: 20 }} 
               animate={{ opacity: 1, scale: 1, y: 0 }} 
               exit={{ opacity: 0, scale: 0.9, y: 20 }} 
-              className="relative w-full max-w-lg bg-white rounded-[32px] shadow-2xl overflow-hidden"
+              className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden"
             >
-              <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
                 <div>
-                  <h3 className="text-2xl font-bold text-slate-900">{editingCustomer ? 'Edit Customer' : 'New Customer'}</h3>
-                  <p className="text-xs text-slate-500 mt-1 font-medium uppercase tracking-wider">Fill in client information</p>
+                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{editingCustomer ? 'Edit Customer' : 'New Customer'}</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium uppercase tracking-wider">Fill in client information</p>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all shadow-sm">
+                <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm">
                   <X size={20} />
                 </button>
               </div>
@@ -272,7 +272,7 @@ const Customers: React.FC = () => {
                     <label className="label-caps ml-1">Customer Name</label>
                     <input 
                       required 
-                      className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all" 
+                      className="w-full px-5 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white" 
                       value={formData.name} 
                       onChange={e => setFormData({...formData, name: e.target.value})} 
                       placeholder="e.g. Reliance Industries"
@@ -281,7 +281,7 @@ const Customers: React.FC = () => {
                   <div className="space-y-2">
                     <label className="label-caps ml-1">Phone Number</label>
                     <input 
-                      className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all" 
+                      className="w-full px-5 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white" 
                       value={formData.phone} 
                       onChange={e => setFormData({...formData, phone: e.target.value})} 
                       placeholder="+91 00000 00000"
@@ -291,16 +291,16 @@ const Customers: React.FC = () => {
                 <div className="space-y-2">
                   <label className="label-caps ml-1">GST Number</label>
                   <input 
-                    className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all" 
+                    className="w-full px-5 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white" 
                     value={formData.gst} 
                     onChange={e => setFormData({...formData, gst: e.target.value})} 
-                    placeholder="27AAAAA0000A1Z5"
+                    placeholder="24AAAAA0000A1Z5"
                   />
                 </div>
                 <div className="space-y-2">
                   <label className="label-caps ml-1">Full Address</label>
                   <textarea 
-                    className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all" 
+                    className="w-full px-5 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white" 
                     rows={3} 
                     value={formData.address} 
                     onChange={e => setFormData({...formData, address: e.target.value})} 
@@ -311,7 +311,7 @@ const Customers: React.FC = () => {
                   <button 
                     type="button" 
                     onClick={() => setIsModalOpen(false)} 
-                    className="flex-1 px-6 py-4 border border-slate-200 text-slate-600 font-bold rounded-2xl hover:bg-slate-50 transition-all"
+                    className="flex-1 px-6 py-4 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-bold rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
                   >
                     Cancel
                   </button>

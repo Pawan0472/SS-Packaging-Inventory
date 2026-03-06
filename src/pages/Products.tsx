@@ -34,7 +34,8 @@ const Products = () => {
     category: 'Bottle',
     gram_weight: '',
     price: '',
-    min_stock_level: ''
+    min_stock_level: '',
+    stock: '0'
   });
 
   const fetchData = async () => {
@@ -79,19 +80,19 @@ const Products = () => {
         ...formData,
         price: parseFloat(formData.price) || 0,
         min_stock_level: parseInt(formData.min_stock_level) || 0,
-        stock: editingProduct ? editingProduct.stock : 0
+        stock: editingProduct ? editingProduct.stock : (parseInt(formData.stock) || 0)
       };
 
       if (editingProduct) {
-        await db.products.update(editingProduct.id, payload);
+        await db.products.update(editingProduct.id, payload, user?.email || 'system');
         toast.success('Product updated successfully');
       } else {
-        await db.products.create(payload);
+        await db.products.create(payload, user?.email || 'system');
         toast.success('Product created successfully');
       }
       setIsModalOpen(false);
       setEditingProduct(null);
-      setFormData({ name: '', category: 'Bottle', gram_weight: '', price: '', min_stock_level: '' });
+      setFormData({ name: '', category: 'Bottle', gram_weight: '', price: '', min_stock_level: '', stock: '0' });
       fetchData();
     } catch (error: any) {
       console.error('Error saving product:', error);
@@ -105,9 +106,9 @@ const Products = () => {
       return;
     }
 
-    if (!window.confirm('Are you sure?')) return;
+    if (!window.confirm('Are you sure? This will hide the product from the list.')) return;
     try {
-      await db.products.delete(id);
+      await db.products.softDelete(id, user?.email || 'system');
       toast.success('Product deleted');
       fetchData();
     } catch (error) {
@@ -122,13 +123,13 @@ const Products = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Products</h2>
-          <p className="text-slate-500 mt-1">Manage your inventory and product catalogue.</p>
+          <h2 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Products</h2>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">Manage your inventory and product catalogue.</p>
         </div>
         <button 
           onClick={() => {
             setEditingProduct(null);
-            setFormData({ name: '', category: 'Bottle', gram_weight: '', price: '', min_stock_level: '' });
+            setFormData({ name: '', category: 'Bottle', gram_weight: '', price: '', min_stock_level: '', stock: '0' });
             setIsModalOpen(true);
           }}
           className="bg-indigo-600 text-white px-6 py-3 rounded-2xl text-sm font-bold shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 transition-all flex items-center gap-2 group"
@@ -141,23 +142,23 @@ const Products = () => {
       {/* Filters & Search */}
       <div className="flex flex-col md:flex-row gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={20} />
           <input 
             type="text" 
             placeholder="Search products by name, SKU or category..." 
-            className="w-full pl-12 pr-6 py-4 rounded-2xl bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm"
+            className="w-full pl-12 pr-6 py-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button className="bg-white border border-slate-200 px-6 py-4 rounded-2xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2">
+        <button className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-6 py-4 rounded-2xl text-sm font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center gap-2">
           <Filter size={18} />
           <span>Filters</span>
         </button>
       </div>
 
       {/* Table Container */}
-      <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="erp-table">
             <thead>
@@ -175,17 +176,17 @@ const Products = () => {
               {loading ? (
                 [1, 2, 3, 4, 5].map(i => (
                   <tr key={i} className="animate-pulse">
-                    <td colSpan={7} className="py-8 px-6 bg-slate-50/20"></td>
+                    <td colSpan={7} className="py-8 px-6 bg-slate-50/20 dark:bg-slate-800/20"></td>
                   </tr>
                 ))
               ) : filteredProducts.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-20 text-center">
-                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
+                    <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400 dark:text-slate-600">
                       <Package size={32} />
                     </div>
-                    <h3 className="text-lg font-bold text-slate-900">No products found</h3>
-                    <p className="text-slate-500 mt-1">Try adjusting your search or add a new product.</p>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">No products found</h3>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1">Try adjusting your search or add a new product.</p>
                   </td>
                 </tr>
               ) : (
@@ -193,43 +194,43 @@ const Products = () => {
                   <tr key={product.id} className="group">
                     <td>
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all">
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-600 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-500/10 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-all">
                           <Package size={20} />
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900">{product.name}</p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">SKU: SS-PRD-{product.id}</p>
+                          <p className="font-bold text-slate-900 dark:text-white">{product.name}</p>
+                          <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">SKU: SS-PRD-{product.id}</p>
                         </div>
                       </div>
                     </td>
                     <td>
-                      <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                      <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-full text-[10px] font-bold uppercase tracking-wider">
                         {product.category}
                       </span>
                     </td>
-                    <td className="data-value">{product.gram_weight}</td>
+                    <td className="data-value dark:text-slate-400">{product.gram_weight}</td>
                     <td>
                       <div className="flex flex-col gap-1">
-                        <span className={cn("font-bold", (product.stock || 0) < (product.min_stock_level || 0) ? "text-rose-500" : "text-slate-900")}>
+                        <span className={cn("font-bold", (product.stock || 0) < (product.min_stock_level || 0) ? "text-rose-500 dark:text-rose-400" : "text-slate-900 dark:text-white")}>
                           {(product.stock || 0).toLocaleString()}
                         </span>
-                        <div className="w-24 h-1 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="w-24 h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                           <div 
-                            className={cn("h-full", (product.stock || 0) < (product.min_stock_level || 0) ? "bg-rose-500" : "bg-emerald-500")}
+                            className={cn("h-full", (product.stock || 0) < (product.min_stock_level || 0) ? "bg-rose-500 dark:bg-rose-400" : "bg-emerald-500 dark:bg-emerald-400")}
                             style={{ width: `${Math.min(((product.stock || 0) / (product.min_stock_level || 1)) * 50, 100)}%` }}
                           ></div>
                         </div>
                       </div>
                     </td>
-                    <td className="font-bold text-slate-900">₹{product.price}</td>
+                    <td className="font-bold text-slate-900 dark:text-white">₹{product.price}</td>
                     <td>
                       {(product.stock || 0) < (product.min_stock_level || 0) ? (
-                        <div className="flex items-center gap-1.5 text-rose-500">
+                        <div className="flex items-center gap-1.5 text-rose-500 dark:text-rose-400">
                           <AlertTriangle size={14} />
                           <span className="text-[10px] font-bold uppercase tracking-wider">Low Stock</span>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1.5 text-emerald-500">
+                        <div className="flex items-center gap-1.5 text-emerald-500 dark:text-emerald-400">
                           <TrendingUp size={14} />
                           <span className="text-[10px] font-bold uppercase tracking-wider">Healthy</span>
                         </div>
@@ -244,24 +245,25 @@ const Products = () => {
                               name: product.name,
                               category: product.category,
                               gram_weight: product.gram_weight,
-                              price: product.price,
-                              min_stock_level: product.min_stock_level
+                              price: product.price.toString(),
+                              min_stock_level: product.min_stock_level.toString(),
+                              stock: product.stock.toString()
                             });
                             setIsModalOpen(true);
                           }}
-                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                          className="p-2 text-slate-400 dark:text-slate-600 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-all"
                         >
                           <Edit2 size={16} />
                         </button>
                         {user?.role === 'admin' && (
                           <button 
                             onClick={() => handleDelete(product.id)}
-                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                            className="p-2 text-slate-400 dark:text-slate-600 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-all"
                           >
                             <Trash2 size={16} />
                           </button>
                         )}
-                        <button className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all">
+                        <button className="p-2 text-slate-400 dark:text-slate-600 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all">
                           <MoreVertical size={16} />
                         </button>
                       </div>
@@ -274,16 +276,16 @@ const Products = () => {
         </div>
         
         {/* Pagination */}
-        <div className="p-6 bg-slate-50/50 flex items-center justify-between border-t border-slate-100">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Showing {filteredProducts.length} products</p>
+        <div className="p-6 bg-slate-50/50 dark:bg-slate-800/50 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
+          <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Showing {filteredProducts.length} products</p>
           <div className="flex items-center gap-2">
-            <button className="p-2 rounded-xl border border-slate-200 text-slate-400 hover:bg-white hover:text-slate-900 transition-all disabled:opacity-50">
+            <button className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:bg-white dark:hover:bg-slate-900 hover:text-slate-900 dark:hover:text-white transition-all disabled:opacity-50">
               <ChevronLeft size={18} />
             </button>
             <div className="flex items-center gap-1">
               <button className="w-8 h-8 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow-lg shadow-indigo-600/20">1</button>
             </div>
-            <button className="p-2 rounded-xl border border-slate-200 text-slate-400 hover:bg-white hover:text-slate-900 transition-all">
+            <button className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:bg-white dark:hover:bg-slate-900 hover:text-slate-900 dark:hover:text-white transition-all">
               <ChevronRight size={18} />
             </button>
           </div>
@@ -305,14 +307,14 @@ const Products = () => {
               initial={{ opacity: 0, scale: 0.9, y: 20 }} 
               animate={{ opacity: 1, scale: 1, y: 0 }} 
               exit={{ opacity: 0, scale: 0.9, y: 20 }} 
-              className="relative w-full max-w-lg bg-white rounded-[32px] shadow-2xl overflow-hidden"
+              className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden"
             >
-              <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
                 <div>
-                  <h3 className="text-2xl font-bold text-slate-900">{editingProduct ? 'Edit Product' : 'New Product'}</h3>
-                  <p className="text-xs text-slate-500 mt-1 font-medium uppercase tracking-wider">Fill in product details</p>
+                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{editingProduct ? 'Edit Product' : 'New Product'}</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium uppercase tracking-wider">Fill in product details</p>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all shadow-sm">
+                <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm">
                   <X size={20} />
                 </button>
               </div>
@@ -321,7 +323,7 @@ const Products = () => {
                   <label className="label-caps ml-1">Product Name</label>
                   <input 
                     required 
-                    className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all" 
+                    className="w-full px-5 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white" 
                     value={formData.name} 
                     onChange={e => setFormData({...formData, name: e.target.value})} 
                     placeholder="e.g. 500ml PET Bottle"
@@ -331,7 +333,7 @@ const Products = () => {
                   <div className="space-y-2">
                     <label className="label-caps ml-1">Category</label>
                     <select 
-                      className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                      className="w-full px-5 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white"
                       value={formData.category}
                       onChange={e => setFormData({...formData, category: e.target.value})}
                     >
@@ -343,7 +345,7 @@ const Products = () => {
                   <div className="space-y-2">
                     <label className="label-caps ml-1">Weight (e.g. 18g)</label>
                     <input 
-                      className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all" 
+                      className="w-full px-5 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white" 
                       value={formData.gram_weight} 
                       onChange={e => setFormData({...formData, gram_weight: e.target.value})} 
                       placeholder="18g"
@@ -357,7 +359,7 @@ const Products = () => {
                       type="number"
                       step="0.01"
                       required
-                      className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all" 
+                      className="w-full px-5 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white" 
                       value={formData.price} 
                       onChange={e => setFormData({...formData, price: e.target.value})} 
                       placeholder="4.50"
@@ -368,18 +370,30 @@ const Products = () => {
                     <input 
                       type="number"
                       required
-                      className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all" 
+                      className="w-full px-5 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white" 
                       value={formData.min_stock_level} 
                       onChange={e => setFormData({...formData, min_stock_level: e.target.value})} 
                       placeholder="5000"
                     />
                   </div>
                 </div>
+                {!editingProduct && (
+                  <div className="space-y-2">
+                    <label className="label-caps ml-1">Opening Stock</label>
+                    <input 
+                      type="number"
+                      className="w-full px-5 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white" 
+                      value={formData.stock} 
+                      onChange={e => setFormData({...formData, stock: e.target.value})} 
+                      placeholder="0"
+                    />
+                  </div>
+                )}
                 <div className="pt-4 flex gap-4">
                   <button 
                     type="button" 
                     onClick={() => setIsModalOpen(false)} 
-                    className="flex-1 px-6 py-4 border border-slate-200 text-slate-600 font-bold rounded-2xl hover:bg-slate-50 transition-all"
+                    className="flex-1 px-6 py-4 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-bold rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
                   >
                     Cancel
                   </button>

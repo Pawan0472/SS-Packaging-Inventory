@@ -21,6 +21,8 @@ import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../utils/cn';
 
+import { db } from '../services/db';
+
 const DataManagement: React.FC = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -29,7 +31,6 @@ const DataManagement: React.FC = () => {
   const handleExport = async (type: string) => {
     if (isDemo) {
       toast.success(`Demo: Exporting ${type} data...`);
-      // Simulate download
       const csvContent = "id,name,category\n1,Sample Item,Category A";
       const blob = new Blob([csvContent], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
@@ -41,12 +42,31 @@ const DataManagement: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/data/export/${type}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!response.ok) throw new Error('Export failed');
+      let data: any[] = [];
+      switch (type) {
+        case 'products': data = await db.products.getAll(); break;
+        case 'suppliers': data = await db.suppliers.getAll(); break;
+        case 'customers': data = await db.customers.getAll(); break;
+        case 'sales': data = await db.sales.getAll(); break;
+        case 'purchases': data = await db.purchases.getAll(); break;
+        case 'production': data = await db.production.getAll(); break;
+        default: throw new Error('Invalid export type');
+      }
+
+      if (data.length === 0) {
+        toast.error('No data found to export');
+        return;
+      }
+
+      const headers = Object.keys(data[0]).join(',');
+      const rows = data.map(row => 
+        Object.values(row).map(val => 
+          typeof val === 'string' ? `"${val.replace(/"/g, '""')}"` : val
+        ).join(',')
+      ).join('\n');
       
-      const blob = await response.blob();
+      const csvContent = `${headers}\n${rows}`;
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -54,6 +74,7 @@ const DataManagement: React.FC = () => {
       document.body.appendChild(a);
       a.click();
       a.remove();
+      toast.success(`${type} data exported successfully`);
     } catch (error) {
       toast.error('Failed to export data');
     }
@@ -74,20 +95,38 @@ const DataManagement: React.FC = () => {
     if (!selectedFile) return toast.error('Please select a CSV file');
 
     setIsImporting(true);
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-
     try {
-      const response = await fetch('/api/data/import/products', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
+      const text = await selectedFile.text();
+      const lines = text.split('\n').filter(line => line.trim());
+      if (lines.length < 2) throw new Error('CSV file is empty or missing headers');
+
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const rows = lines.slice(1).map(line => {
+        const values = line.split(',');
+        return headers.reduce((obj: any, header, index) => {
+          obj[header] = values[index]?.trim();
+          return obj;
+        }, {});
       });
 
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || 'Import failed');
+      // Simple import for products as example
+      let successCount = 0;
+      for (const row of rows) {
+        try {
+          await db.products.create({
+            name: row.name,
+            category: row.category,
+            gram_weight: parseFloat(row.gram_weight) || 0,
+            min_stock_level: parseFloat(row.min_stock_level) || 0,
+            current_stock: parseFloat(row.current_stock) || 0
+          }, 'system-import');
+          successCount++;
+        } catch (err) {
+          console.error('Failed to import row:', row, err);
+        }
+      }
 
-      toast.success(result.message);
+      toast.success(`Imported ${successCount} products successfully`);
       setSelectedFile(null);
     } catch (error: any) {
       toast.error(error.message);
@@ -101,11 +140,11 @@ const DataManagement: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Data Management</h2>
-          <p className="text-slate-500 mt-1">Export your records or import data from external sources like Tally.</p>
+          <h2 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Data Management</h2>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">Export your records or import data from external sources like Tally.</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="px-4 py-2 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-2xl text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+          <div className="px-4 py-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/20 rounded-2xl text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
             <ShieldCheck size={14} />
             Secure Storage
           </div>
@@ -114,17 +153,17 @@ const DataManagement: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Export Section */}
-        <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-50 rounded-full -mr-24 -mt-24 group-hover:scale-110 transition-transform duration-700"></div>
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-50 dark:bg-indigo-500/10 rounded-full -mr-24 -mt-24 group-hover:scale-110 transition-transform duration-700"></div>
           
           <div className="relative">
             <div className="flex items-center gap-4 mb-8">
-              <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+              <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-500/10 rounded-2xl flex items-center justify-center text-indigo-600 dark:text-indigo-400">
                 <Download size={28} />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-slate-900">Export Center</h3>
-                <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-0.5">Download your records</p>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Export Center</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider mt-0.5">Download your records</p>
               </div>
             </div>
 
@@ -140,26 +179,26 @@ const DataManagement: React.FC = () => {
                 <button
                   key={item.id}
                   onClick={() => handleExport(item.id)}
-                  className="flex items-center justify-between p-5 bg-slate-50 border border-slate-100 rounded-[24px] hover:bg-white hover:border-indigo-200 hover:shadow-md transition-all group/btn"
+                  className="flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-[24px] hover:bg-white dark:hover:bg-slate-900 hover:border-indigo-200 dark:hover:border-indigo-500/30 hover:shadow-md transition-all group/btn"
                 >
                   <div className="flex items-center gap-3">
-                    <item.icon className="text-slate-400 group-hover/btn:text-indigo-600 transition-colors" size={20} />
-                    <span className="text-sm font-bold text-slate-700">{item.label}</span>
+                    <item.icon className="text-slate-400 dark:text-slate-500 group-hover/btn:text-indigo-600 dark:group-hover/btn:text-indigo-400 transition-colors" size={20} />
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{item.label}</span>
                   </div>
-                  <Download size={16} className="text-slate-300 opacity-0 group-hover/btn:opacity-100 transition-all" />
+                  <Download size={16} className="text-slate-300 dark:text-slate-600 opacity-0 group-hover/btn:opacity-100 transition-all" />
                 </button>
               ))}
             </div>
 
-            <div className="mt-8 pt-8 border-t border-slate-100">
+            <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800">
               <button
                 onClick={() => handleExport('backup')}
-                className="w-full flex items-center justify-center gap-3 p-5 bg-slate-900 text-white rounded-[24px] hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20 group/backup"
+                className="w-full flex items-center justify-center gap-3 p-5 bg-slate-900 dark:bg-indigo-600 text-white rounded-[24px] hover:bg-slate-800 dark:hover:bg-indigo-700 transition-all shadow-xl shadow-slate-900/20 dark:shadow-indigo-600/20 group/backup"
               >
                 <Database size={20} className="group-hover/backup:rotate-12 transition-transform" />
                 <span className="text-sm font-bold uppercase tracking-widest">Full Database Backup (.db)</span>
               </button>
-              <p className="text-[10px] text-center text-slate-400 font-bold uppercase tracking-widest mt-4">
+              <p className="text-[10px] text-center text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-4">
                 Last backup generated: Today, 10:45 AM
               </p>
             </div>
@@ -167,17 +206,17 @@ const DataManagement: React.FC = () => {
         </div>
 
         {/* Import Section */}
-        <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-50 rounded-full -mr-24 -mt-24 group-hover:scale-110 transition-transform duration-700"></div>
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-50 dark:bg-emerald-500/10 rounded-full -mr-24 -mt-24 group-hover:scale-110 transition-transform duration-700"></div>
 
           <div className="relative">
             <div className="flex items-center gap-4 mb-8">
-              <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600">
+              <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                 <UploadIcon size={28} />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-slate-900">Import Wizard</h3>
-                <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-0.5">Sync from Tally or CSV</p>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Import Wizard</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider mt-0.5">Sync from Tally or CSV</p>
               </div>
             </div>
 
@@ -190,15 +229,15 @@ const DataManagement: React.FC = () => {
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                   id="csv-upload"
                 />
-                <div className="w-full py-12 border-2 border-dashed border-slate-200 rounded-[32px] flex flex-col items-center justify-center gap-4 group-hover/upload:border-emerald-400 group-hover/upload:bg-emerald-50/30 transition-all">
-                  <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover/upload:bg-white group-hover/upload:text-emerald-500 transition-all">
+                <div className="w-full py-12 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[32px] flex flex-col items-center justify-center gap-4 group-hover/upload:border-emerald-400 dark:group-hover/upload:border-emerald-500 group-hover/upload:bg-emerald-50/30 dark:group-hover/upload:bg-emerald-500/5 transition-all">
+                  <div className="w-16 h-16 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-600 group-hover/upload:bg-white dark:group-hover/upload:bg-slate-900 group-hover/upload:text-emerald-500 dark:group-hover/upload:text-emerald-400 transition-all">
                     <FileSpreadsheet size={32} />
                   </div>
                   <div className="text-center">
-                    <p className="text-sm font-bold text-slate-700">
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
                       {selectedFile ? selectedFile.name : 'Drop CSV file here'}
                     </p>
-                    <p className="text-xs text-slate-400 font-medium mt-1 uppercase tracking-widest">
+                    <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mt-1 uppercase tracking-widest">
                       {selectedFile ? `${(selectedFile.size / 1024).toFixed(1)} KB` : 'Supports Tally standard exports'}
                     </p>
                   </div>
@@ -206,9 +245,9 @@ const DataManagement: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-100 flex gap-3">
-                  <AlertCircle className="text-amber-600 shrink-0" size={18} />
-                  <p className="text-[10px] text-amber-800 font-bold leading-relaxed uppercase tracking-wider">
+                <div className="bg-amber-50/50 dark:bg-amber-500/5 p-4 rounded-2xl border border-amber-100 dark:border-amber-500/20 flex gap-3">
+                  <AlertCircle className="text-amber-600 dark:text-amber-400 shrink-0" size={18} />
+                  <p className="text-[10px] text-amber-800 dark:text-amber-200 font-bold leading-relaxed uppercase tracking-wider">
                     Headers must match: Name, Category, Weight, Min Stock.
                   </p>
                 </div>
@@ -223,7 +262,7 @@ const DataManagement: React.FC = () => {
                     a.download = 'tally_import_template.csv';
                     a.click();
                   }}
-                  className="flex items-center justify-center gap-2 p-4 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all"
+                  className="flex items-center justify-center gap-2 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
                 >
                   <Download size={16} />
                   <span>Download Template</span>
@@ -253,46 +292,46 @@ const DataManagement: React.FC = () => {
       </div>
 
       {/* System Health Section */}
-      <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm">
+      <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400">
+            <div className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-600">
               <Cloud size={24} />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-slate-900">Cloud Sync & Health</h3>
-              <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-0.5">Real-time infrastructure status</p>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white">Cloud Sync & Health</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider mt-0.5">Real-time infrastructure status</p>
             </div>
           </div>
-          <button className="p-3 rounded-2xl border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all">
+          <button className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-all">
             <RefreshCw size={20} />
           </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
+          <div className="p-6 rounded-3xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Database</span>
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Database</span>
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             </div>
-            <p className="text-lg font-bold text-slate-900">Supabase Cloud</p>
-            <p className="text-xs text-slate-500 mt-1">Latency: 24ms</p>
+            <p className="text-lg font-bold text-slate-900 dark:text-white">Supabase Cloud</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Latency: 24ms</p>
           </div>
-          <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
+          <div className="p-6 rounded-3xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Storage</span>
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Storage</span>
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
             </div>
-            <p className="text-lg font-bold text-slate-900">1.2 GB / 5 GB</p>
-            <p className="text-xs text-slate-500 mt-1">24% capacity used</p>
+            <p className="text-lg font-bold text-slate-900 dark:text-white">1.2 GB / 5 GB</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">24% capacity used</p>
           </div>
-          <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
+          <div className="p-6 rounded-3xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Last Sync</span>
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Last Sync</span>
               <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
             </div>
-            <p className="text-lg font-bold text-slate-900">Automated</p>
-            <p className="text-xs text-slate-500 mt-1">2 minutes ago</p>
+            <p className="text-lg font-bold text-slate-900 dark:text-white">Automated</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">2 minutes ago</p>
           </div>
         </div>
       </div>

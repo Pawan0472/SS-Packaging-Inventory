@@ -28,7 +28,12 @@ const Login: React.FC = () => {
     // 1. Try Demo Login first for convenience
     if (data.username === 'admin' && data.password === 'admin123') {
       setTimeout(() => {
-        login('demo-token', { id: 'demo-1', username: 'Admin User', role: 'admin' });
+        login('demo-token', { 
+          id: 'demo-1', 
+          username: 'Admin User', 
+          role: 'admin',
+          email: 'admin@example.com'
+        });
         toast.success('Welcome to SS Packaging ERP Pro (Demo Mode)');
         setIsLoading(false);
       }, 1000);
@@ -51,7 +56,8 @@ const Login: React.FC = () => {
           login(authData.session.access_token, {
             id: authData.user.id,
             username: authData.user.email?.split('@')[0] || 'User',
-            role: (authData.user.user_metadata?.role as any) || 'staff'
+            role: (authData.user.user_metadata?.role as any) || 'staff',
+            email: authData.user.email || ''
           });
           toast.success('Authenticated via Supabase');
           return;

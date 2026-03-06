@@ -1,93 +1,448 @@
-import React, { useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  Factory, 
+  Plus, 
+  Trash2, 
+  Calendar, 
+  ArrowRight, 
+  Loader2,
+  X,
+  AlertCircle,
+  Filter,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  MoreVertical,
+  ArrowDownRight,
+  ArrowUpRight,
+  History
+} from 'lucide-react';
 import { db } from '../services/db';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
+import { cn } from '../utils/cn';
 
-const Production = () => {
-  const { user } = useAuth();
-  const [production, setProduction] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+interface Product {
+  id: number;
+  name: string;
+  category: string;
+  current_stock: number;
+}
+
+interface ProductionEntry {
+  id: number;
+  date: string;
+  preform_name: string;
+  bottle_name: string;
+  quantity: number;
+}
+
+const Production: React.FC = () => {
+  const [entries, setEntries] = useState<ProductionEntry[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  
+  // Form State
+  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [preformId, setPreformId] = useState('');
+  const [bottleId, setBottleId] = useState('');
+  const [quantity, setQuantity] = useState('');
+
+  const { token, user, isDemo } = useAuth();
 
   const fetchData = async () => {
+    if (isDemo) {
+      setEntries([
+        { id: 1, date: '2024-03-25', preform_name: '18g Preform Blue', bottle_name: '500ml Water Bottle', quantity: 5000 },
+        { id: 2, date: '2024-03-24', preform_name: '24g Preform Clear', bottle_name: '1L Juice Bottle', quantity: 3000 },
+        { id: 3, date: '2024-03-23', preform_name: '18g Preform Blue', bottle_name: '500ml Water Bottle', quantity: 4500 },
+      ]);
+      setProducts([
+        { id: 1, name: '18g Preform Blue', category: 'Preform', current_stock: 15000 },
+        { id: 2, name: '24g Preform Clear', category: 'Preform', current_stock: 8000 },
+        { id: 3, name: '500ml Water Bottle', category: 'Bottle', current_stock: 12000 },
+        { id: 4, name: '1L Juice Bottle', category: 'Bottle', current_stock: 5000 },
+      ]);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      setLoading(true);
-      const data = await db.production.getAll();
-      setProduction(data);
-    } catch {
-      toast.error("Failed to load production");
+      const [eData, pData] = await Promise.all([
+        db.production.getAll(),
+        db.products.getAll()
+      ]);
+      setEntries(eData);
+      setProducts(pData.map((p: any) => ({ ...p, current_stock: p.stock })));
+    } catch (error) {
+      toast.error('Failed to load data');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [token, isDemo]);
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Delete this production entry?")) return;
+  const preforms = products.filter(p => p.category === 'Preform');
+  const bottles = products.filter(p => p.category === 'Bottle');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isDemo) {
+      toast.success('Demo: Production recorded (Stock not updated in demo)');
+      setIsModalOpen(false);
+      resetForm();
+      return;
+    }
+
+    if (!preformId || !bottleId || !quantity) return toast.error('Please fill all fields');
+
+    const selectedPreform = products.find(p => p.id === parseInt(preformId));
+    if (selectedPreform && selectedPreform.current_stock < parseFloat(quantity)) {
+      return toast.error(`Insufficient preform stock. Available: ${selectedPreform.current_stock}`);
+    }
 
     try {
-      await db.production.softDelete(id, user?.email ?? '');
-      toast.success("Production deleted");
+      await db.production.create({
+        date,
+        preform_product_id: parseInt(preformId),
+        bottle_product_id: parseInt(bottleId),
+        quantity: parseFloat(quantity)
+      }, user?.email || 'system');
+
+      toast.success('Production recorded successfully');
+      setIsModalOpen(false);
+      resetForm();
       fetchData();
-    } catch {
-      toast.error("Delete failed");
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to record production');
     }
   };
 
+  const resetForm = () => {
+    setDate(format(new Date(), 'yyyy-MM-dd'));
+    setPreformId('');
+    setBottleId('');
+    setQuantity('');
+  };
+
+  const handleDelete = async (id: number) => {
+    if (isDemo) {
+      toast.success('Demo: Production entry deleted');
+      return;
+    }
+
+    if (!window.confirm('Are you sure you want to delete this production entry? This will hide it and reverse the stock.')) return;
+
+    try {
+      await db.production.softDelete(id, user?.email || 'system');
+      toast.success('Production entry deleted and stock reversed');
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to delete production entry');
+    }
+  };
+
+  const filteredEntries = entries.filter(e => 
+    e.preform_name.toLowerCase().includes(search.toLowerCase()) ||
+    e.bottle_name.toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
     <div className="space-y-8">
-
-      <div className="flex justify-between items-center">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Production</h2>
-          <p className="text-slate-500 text-sm">Manage production entries</p>
+          <h2 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Production</h2>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">Track manufacturing logs and stock transformations.</p>
         </div>
-
-        <button className="bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center gap-2">
-          <Plus size={16} />
-          Add Production
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="bg-indigo-600 text-white px-6 py-3 rounded-2xl text-sm font-bold shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 transition-all flex items-center gap-2 group"
+        >
+          <Plus size={20} className="group-hover:rotate-90 transition-transform" />
+          <span>New Entry</span>
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="p-3 text-left">Date</th>
-              <th className="p-3 text-left">Preform</th>
-              <th className="p-3 text-left">Bottle</th>
-              <th className="p-3 text-left">Quantity</th>
-              <th className="p-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="p-6 text-center">Loading...</td>
-              </tr>
-            ) : production.map(p => (
-              <tr key={p.id} className="border-t">
-                <td className="p-3">{format(new Date(p.date), 'dd MMM yyyy')}</td>
-                <td className="p-3">{p.preform_name}</td>
-                <td className="p-3">{p.bottle_name}</td>
-                <td className="p-3">{p.quantity}</td>
-                <td className="p-3 text-right">
-                  <button
-                    onClick={() => handleDelete(p.id)}
-                    className="p-2 hover:bg-rose-50 text-rose-600 rounded"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Stats Quick View */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+            <History size={24} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Total Logs</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">{entries.length}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+            <ArrowUpRight size={24} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Bottles Produced</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">
+              {entries.reduce((sum, e) => sum + e.quantity, 0).toLocaleString()}
+            </p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center text-rose-600 dark:text-rose-400">
+            <ArrowDownRight size={24} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Preforms Consumed</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">
+              {entries.reduce((sum, e) => sum + e.quantity, 0).toLocaleString()}
+            </p>
+          </div>
+        </div>
       </div>
+
+      {/* Filters & Search */}
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={20} />
+          <input 
+            type="text" 
+            placeholder="Search by product name..." 
+            className="w-full pl-12 pr-6 py-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <button className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-6 py-4 rounded-2xl text-sm font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center gap-2">
+          <Filter size={18} />
+          <span>Filters</span>
+        </button>
+      </div>
+
+      {/* Table Container */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="erp-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Source (Preform)</th>
+                <th className="text-center">Process</th>
+                <th>Result (Bottle)</th>
+                <th>Quantity</th>
+                <th className="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                [1, 2, 3, 4, 5].map(i => (
+                  <tr key={i} className="animate-pulse">
+                    <td colSpan={6} className="py-8 px-6 bg-slate-50/20 dark:bg-slate-800/20"></td>
+                  </tr>
+                ))
+              ) : filteredEntries.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-20 text-center">
+                    <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400 dark:text-slate-600">
+                      <Factory size={32} />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">No production logs</h3>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium">Record your first manufacturing entry to see it here.</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredEntries.map((e) => (
+                  <tr key={e.id} className="group">
+                    <td className="text-slate-600 dark:text-slate-400 font-medium">{format(new Date(e.date), 'dd MMM yyyy')}</td>
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                          <ArrowDownRight size={14} />
+                        </div>
+                        <span className="font-bold text-slate-900 dark:text-white">{e.preform_name}</span>
+                      </div>
+                    </td>
+                    <td className="text-center">
+                      <div className="flex items-center justify-center">
+                        <div className="h-px w-8 bg-slate-200 dark:bg-slate-800"></div>
+                        <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900">
+                          <ArrowRight size={14} />
+                        </div>
+                        <div className="h-px w-8 bg-slate-200 dark:bg-slate-800"></div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                          <ArrowUpRight size={14} />
+                        </div>
+                        <span className="font-bold text-slate-900 dark:text-white">{e.bottle_name}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
+                        {e.quantity.toLocaleString()} PCS
+                      </span>
+                    </td>
+                    <td className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button 
+                          onClick={() => handleDelete(e.id)}
+                          className="p-2 text-slate-400 dark:text-slate-600 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all"
+                          title="Delete Production Entry"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        
+        {/* Pagination */}
+        <div className="p-6 bg-slate-50/50 dark:bg-slate-800/50 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
+          <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Showing {filteredEntries.length} entries</p>
+          <div className="flex items-center gap-2">
+            <button className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:bg-white dark:hover:bg-slate-900 hover:text-slate-900 dark:hover:text-white transition-all disabled:opacity-50">
+              <ChevronLeft size={18} />
+            </button>
+            <button className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:bg-white dark:hover:bg-slate-900 hover:text-slate-900 dark:hover:text-white transition-all">
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* New Production Modal */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-[32px] shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Record Production</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium uppercase tracking-wider">Log manufacturing output</p>
+                </div>
+                <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="p-8 space-y-6">
+                <div className="space-y-2">
+                  <label className="label-caps ml-1">Production Date</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={18} />
+                    <input
+                      required
+                      type="date"
+                      className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6">
+                  <div className="space-y-2">
+                    <label className="label-caps ml-1">Source Preform</label>
+                    <select
+                      required
+                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white"
+                      value={preformId}
+                      onChange={(e) => setPreformId(e.target.value)}
+                    >
+                      <option value="">Select Preform</option>
+                      {preforms.map(p => (
+                        <option key={p.id} value={p.id}>{p.name} (Stock: {p.current_stock})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex justify-center">
+                    <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                      <ArrowRight size={20} className="rotate-90" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="label-caps ml-1">Resulting Bottle</label>
+                    <select
+                      required
+                      className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white"
+                      value={bottleId}
+                      onChange={(e) => setBottleId(e.target.value)}
+                    >
+                      <option value="">Select Bottle</option>
+                      {bottles.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="label-caps ml-1">Quantity Produced (PCS)</label>
+                  <div className="relative">
+                    <Factory className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={18} />
+                    <input
+                      required
+                      type="number"
+                      className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white"
+                      placeholder="Enter pieces"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                    />
+                  </div>
+                  {preformId && (
+                    <div className="mt-2 flex items-center gap-2 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                      <AlertCircle size={12} className="text-indigo-500 dark:text-indigo-400" />
+                      <span>Available stock: {products.find(p => p.id === parseInt(preformId))?.current_stock} PCS</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-4 flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="flex-1 px-6 py-4 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-bold rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-6 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-600/20 transition-all"
+                  >
+                    Confirm Entry
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -8,25 +8,45 @@
 
 @layer base {
   body {
-    @apply bg-[#F8FAFC] text-slate-900 font-sans antialiased selection:bg-indigo-100 selection:text-indigo-900;
+    @apply bg-[#F8FAFC] text-slate-900 font-sans antialiased selection:bg-indigo-100 selection:text-indigo-900 transition-colors duration-300;
+  }
+
+  .dark body {
+    @apply bg-slate-950 text-slate-100 selection:bg-indigo-900 selection:text-indigo-100;
   }
 }
 
 @layer components {
   .glass-panel {
-    @apply bg-white/70 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.04)];
+    @apply bg-white/70 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.04)] transition-all duration-300;
+  }
+
+  .dark .glass-panel {
+    @apply bg-slate-900/70 border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.2)];
   }
   
   .bento-card {
     @apply bg-white border border-slate-200/60 shadow-sm rounded-2xl p-6 transition-all duration-300 hover:shadow-md hover:border-indigo-100/50;
   }
+
+  .dark .bento-card {
+    @apply bg-slate-900 border-slate-800 hover:border-indigo-500/30 hover:shadow-indigo-500/5;
+  }
   
   .data-value {
-    @apply font-mono tracking-tight text-slate-900;
+    @apply font-mono tracking-tight text-slate-900 transition-colors duration-300;
+  }
+
+  .dark .data-value {
+    @apply text-white;
   }
   
   .label-caps {
-    @apply text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400;
+    @apply text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400 transition-colors duration-300;
+  }
+
+  .dark .label-caps {
+    @apply text-slate-500;
   }
 }
 
@@ -44,9 +64,8 @@
   @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
 }
 
-/* Smooth transitions */
-* {
-  @apply transition-colors duration-200;
+.dark ::-webkit-scrollbar-thumb {
+  @apply bg-slate-800 hover:bg-slate-700;
 }
 
 /* Table styling */
@@ -55,11 +74,19 @@
 }
 
 .erp-table th {
-  @apply py-4 px-6 bg-slate-50/50 border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-400 first:rounded-tl-xl last:rounded-tr-xl;
+  @apply py-4 px-6 bg-slate-50/50 border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-400 first:rounded-tl-xl last:rounded-tr-xl transition-colors duration-300;
+}
+
+.dark .erp-table th {
+  @apply bg-slate-900/50 border-slate-800 text-slate-500;
 }
 
 .erp-table td {
-  @apply py-4 px-6 border-b border-slate-50 text-sm text-slate-600 bg-white first:border-l last:border-r;
+  @apply py-4 px-6 border-b border-slate-50 text-sm text-slate-600 bg-white first:border-l last:border-r transition-colors duration-300;
+}
+
+.dark .erp-table td {
+  @apply bg-slate-900 border-slate-800 text-slate-300;
 }
 
 .erp-table tr:last-child td:first-child {
@@ -72,4 +99,8 @@
 
 .erp-table tr:hover td {
   @apply bg-slate-50/30;
+}
+
+.dark .erp-table tr:hover td {
+  @apply bg-slate-800/30;
 }
