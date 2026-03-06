@@ -75,26 +75,6 @@ const Purchases: React.FC = () => {
   const { token, user, isDemo } = useAuth();
 
   const fetchData = async () => {
-    if (isDemo) {
-      setPurchases([
-        { id: 1, invoice_number: 'INV-2024-001', date: '2024-03-15', supplier_name: 'Global Polymers Ltd', total_amount: 125000, transport_cost: 2500 },
-        { id: 2, invoice_number: 'INV-2024-002', date: '2024-03-18', supplier_name: 'Apex Masterbatch', total_amount: 45000, transport_cost: 800 },
-        { id: 3, invoice_number: 'INV-2024-003', date: '2024-03-20', supplier_name: 'Shree Krishna Packaging', total_amount: 82000, transport_cost: 1500 },
-      ]);
-      setProducts([
-        { id: 1, name: '500ml PET Bottle', category: 'Bottle' },
-        { id: 2, name: '1L PET Preform', category: 'Preform' },
-        { id: 3, name: '2L PET Bottle', category: 'Bottle' },
-      ]);
-      setSuppliers([
-        { id: 1, name: 'Global Polymers Ltd' },
-        { id: 2, name: 'Apex Masterbatch' },
-        { id: 3, name: 'Shree Krishna Packaging' },
-      ]);
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
     try {
       const [pData, prodData, supData] = await Promise.all([
@@ -130,13 +110,6 @@ const Purchases: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isDemo) {
-      toast.success('Demo: Purchase recorded (Stock not updated in demo)');
-      setIsModalOpen(false);
-      resetForm();
-      return;
-    }
-
     if (!supplierId || items.some(i => !i.product_id || !i.quantity || !i.rate)) {
       return toast.error('Please fill all required fields');
     }
@@ -192,12 +165,7 @@ const Purchases: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (isDemo) {
-      toast.success('Demo: Purchase deleted');
-      return;
-    }
-
-    if (!window.confirm('Are you sure you want to delete this purchase? This will hide it and reverse the stock.')) return;
+    if (!window.confirm('Are you sure? This will hide it and reverse the stock.')) return;
 
     try {
       await db.purchases.softDelete(id, user?.email || 'system');

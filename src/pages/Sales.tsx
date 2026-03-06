@@ -74,26 +74,6 @@ const Sales: React.FC = () => {
   const { token, user, isDemo } = useAuth();
 
   const fetchData = async () => {
-    if (isDemo) {
-      setSales([
-        { id: 1, invoice_number: 'SAL-2024-001', date: '2024-03-22', customer_name: 'Reliance Industries', total_amount: 45000, transport_cost: 500 },
-        { id: 2, invoice_number: 'SAL-2024-002', date: '2024-03-24', customer_name: 'Tata Consumer Products', total_amount: 120000, transport_cost: 1200 },
-        { id: 3, invoice_number: 'SAL-2024-003', date: '2024-03-25', customer_name: 'Hindustan Unilever', total_amount: 65000, transport_cost: 800 },
-      ]);
-      setProducts([
-        { id: 1, name: '500ml PET Bottle', current_stock: 12500 },
-        { id: 2, name: '1L PET Preform', current_stock: 4200 },
-        { id: 3, name: '2L PET Bottle', current_stock: 8900 },
-      ]);
-      setCustomers([
-        { id: 1, name: 'Reliance Industries' },
-        { id: 2, name: 'Tata Consumer Products' },
-        { id: 3, name: 'Hindustan Unilever' },
-      ]);
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
     try {
       const [sData, prodData, custData] = await Promise.all([
@@ -129,13 +109,6 @@ const Sales: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isDemo) {
-      toast.success('Demo: Sale recorded (Stock not updated in demo)');
-      setIsModalOpen(false);
-      resetForm();
-      return;
-    }
-
     if (!customerId || items.some(i => !i.product_id || !i.quantity || !i.rate)) {
       return toast.error('Please fill all required fields');
     }
@@ -199,12 +172,7 @@ const Sales: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (isDemo) {
-      toast.success('Demo: Sale deleted');
-      return;
-    }
-
-    if (!window.confirm('Are you sure you want to delete this sale? This will hide it and reverse the stock.')) return;
+    if (!window.confirm('Are you sure? This will hide it and reverse the stock.')) return;
 
     try {
       await db.sales.softDelete(id, user?.email || 'system');

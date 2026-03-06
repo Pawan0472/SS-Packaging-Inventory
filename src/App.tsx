@@ -21,6 +21,7 @@ import { useTheme } from './context/ThemeContext';
 import ThemeToggle from './components/ThemeToggle';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from './utils/cn';
+import { seedDemoData } from './services/db';
 
 // Lazy load pages
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -295,6 +296,14 @@ const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const App = () => {
+  const { isDemo } = useAuth();
+
+  React.useEffect(() => {
+    if (isDemo) {
+      seedDemoData();
+    }
+  }, [isDemo]);
+
   return (
     <Routes>
       <Route path="/login" element={

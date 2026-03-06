@@ -24,11 +24,45 @@ const setLocalStorage = (key: string, data: any) => {
   localStorage.setItem(`erp_${key}`, JSON.stringify(data));
 };
 
+export const seedDemoData = async () => {
+  const products = getLocalStorage('products');
+  if (products.length === 0) {
+    const demoProducts = [
+      { name: '500ml PET Bottle', category: 'Bottle', gram_weight: '18g', stock: 12500, min_stock_level: 5000, price: 4.50, is_deleted: false },
+      { name: '1L PET Preform', category: 'Preform', gram_weight: '24g', stock: 4200, min_stock_level: 10000, price: 8.20, is_deleted: false },
+      { name: '2L PET Bottle', category: 'Bottle', gram_weight: '32g', stock: 8900, min_stock_level: 5000, price: 12.00, is_deleted: false },
+    ];
+    setLocalStorage('products', demoProducts);
+  }
+
+  const suppliers = getLocalStorage('suppliers');
+  if (suppliers.length === 0) {
+    const demoSuppliers = [
+      { name: 'Global Polymers Ltd', contact_person: 'John Doe', email: 'john@global.com', phone: '9876543210', is_deleted: false },
+      { name: 'Apex Masterbatch', contact_person: 'Jane Smith', email: 'jane@apex.com', phone: '9876543211', is_deleted: false },
+    ];
+    setLocalStorage('suppliers', demoSuppliers);
+  }
+
+  const customers = getLocalStorage('customers');
+  if (customers.length === 0) {
+    const demoCustomers = [
+      { name: 'Reliance Industries', contact_person: 'Mukesh A.', email: 'mukesh@reliance.com', phone: '9876543212', is_deleted: false },
+      { name: 'Tata Consumer Products', contact_person: 'Ratan T.', email: 'ratan@tata.com', phone: '9876543213', is_deleted: false },
+    ];
+    setLocalStorage('customers', demoCustomers);
+  }
+};
+
 const safeCall = async (supabaseCall: () => Promise<any>, localStorageKey: string, filterFn?: (item: any) => boolean) => {
   if (isSupabaseConfigured) {
     try {
       const { data, error } = await supabaseCall();
-      if (!error && data) return data;
+      if (!error && data) {
+        // Update local cache with Supabase data
+        setLocalStorage(localStorageKey, data);
+        return data;
+      }
       console.warn(`Supabase call for ${localStorageKey} failed, falling back to local storage`, error);
     } catch (e) {
       console.warn(`Supabase connection for ${localStorageKey} failed, falling back to local storage`, e);
@@ -48,49 +82,63 @@ export const db = {
       );
     },
     async create(product: any, userEmail: string) {
-      if (!isSupabaseConfigured) {
-        const products = getLocalStorage('products');
-        const newProduct = { ...product, id: Date.now(), is_deleted: false, stock: 0 };
-        products.push(newProduct);
-        setLocalStorage('products', products);
-        return newProduct;
+      let result;
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase!.from('products').insert([product]).select();
+        if (error) throw error;
+        result = data[0];
+        await logAction(userEmail, 'CREATE', 'products', result.id.toString());
+      } else {
+        result = { ...product, id: Date.now(), is_deleted: false, stock: product.stock || 0 };
       }
-      const { data, error } = await supabase!.from('products').insert([product]).select();
-      if (error) throw error;
-      await logAction(userEmail, 'CREATE', 'products', data[0].id.toString());
-      return data[0];
+
+      // Always update local storage
+      const products = getLocalStorage('products');
+      products.push(result);
+      setLocalStorage('products', products);
+      return result;
     },
     async update(id: number, updates: any, userEmail: string) {
-      if (!isSupabaseConfigured) {
+      let result;
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase!.from('products').update(updates).eq('id', id).select();
+        if (error) throw error;
+        result = data[0];
+        await logAction(userEmail, 'UPDATE', 'products', id.toString());
+      } else {
         const products = getLocalStorage('products');
         const index = products.findIndex((p: any) => p.id === id);
         if (index !== -1) {
           products[index] = { ...products[index], ...updates };
-          setLocalStorage('products', products);
-          return products[index];
+          result = products[index];
         }
-        return null;
       }
-      const { data, error } = await supabase!.from('products').update(updates).eq('id', id).select();
-      if (error) throw error;
-      await logAction(userEmail, 'UPDATE', 'products', id.toString());
-      return data[0];
-    },
-    async softDelete(id: number, userEmail: string) {
-      if (!isSupabaseConfigured) {
+
+      if (result) {
         const products = getLocalStorage('products');
         const index = products.findIndex((p: any) => p.id === id);
         if (index !== -1) {
-          products[index].is_deleted = true;
+          products[index] = result;
           setLocalStorage('products', products);
-          return true;
         }
-        return false;
       }
-      const { error } = await supabase!.from('products').update({ is_deleted: true }).eq('id', id);
-      if (error) throw error;
-      await logAction(userEmail, 'DELETE', 'products', id.toString());
-      return true;
+      return result;
+    },
+    async softDelete(id: number, userEmail: string) {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase!.from('products').update({ is_deleted: true }).eq('id', id);
+        if (error) throw error;
+        await logAction(userEmail, 'DELETE', 'products', id.toString());
+      }
+      
+      const products = getLocalStorage('products');
+      const index = products.findIndex((p: any) => p.id === id);
+      if (index !== -1) {
+        products[index].is_deleted = true;
+        setLocalStorage('products', products);
+        return true;
+      }
+      return false;
     }
   },
   suppliers: {
@@ -102,49 +150,59 @@ export const db = {
       );
     },
     async create(supplier: any, userEmail: string) {
-      if (!isSupabaseConfigured) {
-        const items = getLocalStorage('suppliers');
-        const newItem = { ...supplier, id: Date.now(), is_deleted: false };
-        items.push(newItem);
-        setLocalStorage('suppliers', items);
-        return newItem;
+      let result;
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase!.from('suppliers').insert([supplier]).select();
+        if (error) throw error;
+        result = data[0];
+        await logAction(userEmail, 'CREATE', 'suppliers', result.id.toString());
+      } else {
+        result = { ...supplier, id: Date.now(), is_deleted: false };
       }
-      const { data, error } = await supabase!.from('suppliers').insert([supplier]).select();
-      if (error) throw error;
-      await logAction(userEmail, 'CREATE', 'suppliers', data[0].id.toString());
-      return data[0];
+      const items = getLocalStorage('suppliers');
+      items.push(result);
+      setLocalStorage('suppliers', items);
+      return result;
     },
     async update(id: number, updates: any, userEmail: string) {
-      if (!isSupabaseConfigured) {
+      let result;
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase!.from('suppliers').update(updates).eq('id', id).select();
+        if (error) throw error;
+        result = data[0];
+        await logAction(userEmail, 'UPDATE', 'suppliers', id.toString());
+      } else {
         const items = getLocalStorage('suppliers');
         const index = items.findIndex((i: any) => i.id === id);
         if (index !== -1) {
           items[index] = { ...items[index], ...updates };
-          setLocalStorage('suppliers', items);
-          return items[index];
+          result = items[index];
         }
-        return null;
       }
-      const { data, error } = await supabase!.from('suppliers').update(updates).eq('id', id).select();
-      if (error) throw error;
-      await logAction(userEmail, 'UPDATE', 'suppliers', id.toString());
-      return data[0];
-    },
-    async softDelete(id: number, userEmail: string) {
-      if (!isSupabaseConfigured) {
+      if (result) {
         const items = getLocalStorage('suppliers');
         const index = items.findIndex((i: any) => i.id === id);
         if (index !== -1) {
-          items[index].is_deleted = true;
+          items[index] = result;
           setLocalStorage('suppliers', items);
-          return true;
         }
-        return false;
       }
-      const { error } = await supabase!.from('suppliers').update({ is_deleted: true }).eq('id', id);
-      if (error) throw error;
-      await logAction(userEmail, 'DELETE', 'suppliers', id.toString());
-      return true;
+      return result;
+    },
+    async softDelete(id: number, userEmail: string) {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase!.from('suppliers').update({ is_deleted: true }).eq('id', id);
+        if (error) throw error;
+        await logAction(userEmail, 'DELETE', 'suppliers', id.toString());
+      }
+      const items = getLocalStorage('suppliers');
+      const index = items.findIndex((i: any) => i.id === id);
+      if (index !== -1) {
+        items[index].is_deleted = true;
+        setLocalStorage('suppliers', items);
+        return true;
+      }
+      return false;
     }
   },
   customers: {
@@ -156,49 +214,59 @@ export const db = {
       );
     },
     async create(customer: any, userEmail: string) {
-      if (!isSupabaseConfigured) {
-        const items = getLocalStorage('customers');
-        const newItem = { ...customer, id: Date.now(), is_deleted: false };
-        items.push(newItem);
-        setLocalStorage('customers', items);
-        return newItem;
+      let result;
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase!.from('customers').insert([customer]).select();
+        if (error) throw error;
+        result = data[0];
+        await logAction(userEmail, 'CREATE', 'customers', result.id.toString());
+      } else {
+        result = { ...customer, id: Date.now(), is_deleted: false };
       }
-      const { data, error } = await supabase!.from('customers').insert([customer]).select();
-      if (error) throw error;
-      await logAction(userEmail, 'CREATE', 'customers', data[0].id.toString());
-      return data[0];
+      const items = getLocalStorage('customers');
+      items.push(result);
+      setLocalStorage('customers', items);
+      return result;
     },
     async update(id: number, updates: any, userEmail: string) {
-      if (!isSupabaseConfigured) {
+      let result;
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase!.from('customers').update(updates).eq('id', id).select();
+        if (error) throw error;
+        result = data[0];
+        await logAction(userEmail, 'UPDATE', 'customers', id.toString());
+      } else {
         const items = getLocalStorage('customers');
         const index = items.findIndex((i: any) => i.id === id);
         if (index !== -1) {
           items[index] = { ...items[index], ...updates };
-          setLocalStorage('customers', items);
-          return items[index];
+          result = items[index];
         }
-        return null;
       }
-      const { data, error } = await supabase!.from('customers').update(updates).eq('id', id).select();
-      if (error) throw error;
-      await logAction(userEmail, 'UPDATE', 'customers', id.toString());
-      return data[0];
-    },
-    async softDelete(id: number, userEmail: string) {
-      if (!isSupabaseConfigured) {
+      if (result) {
         const items = getLocalStorage('customers');
         const index = items.findIndex((i: any) => i.id === id);
         if (index !== -1) {
-          items[index].is_deleted = true;
+          items[index] = result;
           setLocalStorage('customers', items);
-          return true;
         }
-        return false;
       }
-      const { error } = await supabase!.from('customers').update({ is_deleted: true }).eq('id', id);
-      if (error) throw error;
-      await logAction(userEmail, 'DELETE', 'customers', id.toString());
-      return true;
+      return result;
+    },
+    async softDelete(id: number, userEmail: string) {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase!.from('customers').update({ is_deleted: true }).eq('id', id);
+        if (error) throw error;
+        await logAction(userEmail, 'DELETE', 'customers', id.toString());
+      }
+      const items = getLocalStorage('customers');
+      const index = items.findIndex((i: any) => i.id === id);
+      if (index !== -1) {
+        items[index].is_deleted = true;
+        setLocalStorage('customers', items);
+        return true;
+      }
+      return false;
     }
   },
   leads: {
@@ -210,49 +278,59 @@ export const db = {
       );
     },
     async create(lead: any, userEmail: string) {
-      if (!isSupabaseConfigured) {
-        const items = getLocalStorage('leads');
-        const newItem = { ...lead, id: Date.now(), is_deleted: false, created_at: new Date().toISOString() };
-        items.push(newItem);
-        setLocalStorage('leads', items);
-        return newItem;
+      let result;
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase!.from('leads').insert([lead]).select();
+        if (error) throw error;
+        result = data[0];
+        await logAction(userEmail, 'CREATE', 'leads', result.id.toString());
+      } else {
+        result = { ...lead, id: Date.now(), is_deleted: false, created_at: new Date().toISOString() };
       }
-      const { data, error } = await supabase!.from('leads').insert([lead]).select();
-      if (error) throw error;
-      await logAction(userEmail, 'CREATE', 'leads', data[0].id.toString());
-      return data[0];
+      const items = getLocalStorage('leads');
+      items.push(result);
+      setLocalStorage('leads', items);
+      return result;
     },
     async update(id: number, updates: any, userEmail: string) {
-      if (!isSupabaseConfigured) {
+      let result;
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase!.from('leads').update(updates).eq('id', id).select();
+        if (error) throw error;
+        result = data[0];
+        await logAction(userEmail, 'UPDATE', 'leads', id.toString());
+      } else {
         const items = getLocalStorage('leads');
         const index = items.findIndex((i: any) => i.id === id);
         if (index !== -1) {
           items[index] = { ...items[index], ...updates };
-          setLocalStorage('leads', items);
-          return items[index];
+          result = items[index];
         }
-        return null;
       }
-      const { data, error } = await supabase!.from('leads').update(updates).eq('id', id).select();
-      if (error) throw error;
-      await logAction(userEmail, 'UPDATE', 'leads', id.toString());
-      return data[0];
-    },
-    async softDelete(id: number, userEmail: string) {
-      if (!isSupabaseConfigured) {
+      if (result) {
         const items = getLocalStorage('leads');
         const index = items.findIndex((i: any) => i.id === id);
         if (index !== -1) {
-          items[index].is_deleted = true;
+          items[index] = result;
           setLocalStorage('leads', items);
-          return true;
         }
-        return false;
       }
-      const { error } = await supabase!.from('leads').update({ is_deleted: true }).eq('id', id);
-      if (error) throw error;
-      await logAction(userEmail, 'DELETE', 'leads', id.toString());
-      return true;
+      return result;
+    },
+    async softDelete(id: number, userEmail: string) {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase!.from('leads').update({ is_deleted: true }).eq('id', id);
+        if (error) throw error;
+        await logAction(userEmail, 'DELETE', 'leads', id.toString());
+      }
+      const items = getLocalStorage('leads');
+      const index = items.findIndex((i: any) => i.id === id);
+      if (index !== -1) {
+        items[index].is_deleted = true;
+        setLocalStorage('leads', items);
+        return true;
+      }
+      return false;
     }
   },
   opportunities: {

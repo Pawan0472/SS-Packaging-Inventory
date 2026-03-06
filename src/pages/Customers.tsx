@@ -70,12 +70,6 @@ const Customers: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isDemo) {
-      toast.success('Demo: Customer saved successfully');
-      setIsModalOpen(false);
-      return;
-    }
-
     try {
       if (editingCustomer) {
         await db.customers.update(editingCustomer.id, formData, user?.email || 'system');

@@ -39,23 +39,28 @@ const Products = () => {
   });
 
   const fetchData = async () => {
-    if (isDemo) {
-      setTimeout(() => {
-        setProducts([
-          { id: 1, name: '500ml PET Bottle', category: 'Bottle', gram_weight: '18g', stock: 12500, min_stock_level: 5000, price: '4.50' },
-          { id: 2, name: '1L PET Preform', category: 'Preform', gram_weight: '24g', stock: 4200, min_stock_level: 10000, price: '8.20' },
-          { id: 3, name: '2L PET Bottle', category: 'Bottle', gram_weight: '32g', stock: 8900, min_stock_level: 5000, price: '12.00' },
-          { id: 4, name: '28mm Blue Cap', category: 'Other', gram_weight: '2.5g', stock: 1200, min_stock_level: 5000, price: '0.85' },
-          { id: 5, name: '500ml Preform', category: 'Preform', gram_weight: '16g', stock: 15000, min_stock_level: 10000, price: '3.90' },
-        ]);
-        setLoading(false);
-      }, 600);
-      return;
-    }
-
+    setLoading(true);
     try {
       const data = await db.products.getAll();
-      setProducts(data);
+      
+      // Seed with demo data if empty and in demo mode
+      if (isDemo && data.length === 0) {
+        const demoProducts = [
+          { name: '500ml PET Bottle', category: 'Bottle', gram_weight: '18g', stock: 12500, min_stock_level: 5000, price: 4.50 },
+          { name: '1L PET Preform', category: 'Preform', gram_weight: '24g', stock: 4200, min_stock_level: 10000, price: 8.20 },
+          { name: '2L PET Bottle', category: 'Bottle', gram_weight: '32g', stock: 8900, min_stock_level: 5000, price: 12.00 },
+          { name: '28mm Blue Cap', category: 'Other', gram_weight: '2.5g', stock: 1200, min_stock_level: 5000, price: 0.85 },
+          { name: '500ml Preform', category: 'Preform', gram_weight: '16g', stock: 15000, min_stock_level: 10000, price: 3.90 },
+        ];
+        
+        for (const p of demoProducts) {
+          await db.products.create(p, 'demo@example.com');
+        }
+        const freshData = await db.products.getAll();
+        setProducts(freshData);
+      } else {
+        setProducts(data);
+      }
     } catch (error) {
       console.error('Failed to fetch products:', error);
     } finally {
@@ -69,12 +74,6 @@ const Products = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isDemo) {
-      toast.success('Demo: Product saved successfully');
-      setIsModalOpen(false);
-      return;
-    }
-
     try {
       const payload = {
         ...formData,
@@ -101,11 +100,6 @@ const Products = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (isDemo) {
-      toast.success('Demo: Product deleted');
-      return;
-    }
-
     if (!window.confirm('Are you sure? This will hide the product from the list.')) return;
     try {
       await db.products.softDelete(id, user?.email || 'system');

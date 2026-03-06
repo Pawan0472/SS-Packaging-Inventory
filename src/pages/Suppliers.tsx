@@ -69,12 +69,6 @@ const Suppliers: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isDemo) {
-      toast.success('Demo: Supplier saved successfully');
-      setIsModalOpen(false);
-      return;
-    }
-
     try {
       if (editingSupplier) {
         await db.suppliers.update(editingSupplier.id, formData, user?.email || 'system');
