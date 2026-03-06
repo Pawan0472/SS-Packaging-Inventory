@@ -29,6 +29,7 @@ interface Product {
   name: string;
   category: string;
   current_stock: number;
+  gram_weight?: number | string;
 }
 
 interface ProductionEntry {
@@ -51,6 +52,7 @@ const Production: React.FC = () => {
   const [preformId, setPreformId] = useState('');
   const [bottleId, setBottleId] = useState('');
   const [quantity, setQuantity] = useState('');
+  const [weightKg, setWeightKg] = useState('');
 
   const { token, user, isDemo } = useAuth();
 
@@ -131,6 +133,37 @@ const Production: React.FC = () => {
     setPreformId('');
     setBottleId('');
     setQuantity('');
+    setWeightKg('');
+  };
+
+  const handleWeightChange = (kg: string) => {
+    setWeightKg(kg);
+    const product = products.find(p => p.id === parseInt(preformId));
+    if (product && (product as any).gram_weight) {
+      const gramWeight = typeof (product as any).gram_weight === 'string' 
+        ? parseFloat((product as any).gram_weight) 
+        : (product as any).gram_weight;
+      
+      if (gramWeight > 0) {
+        const pieces = Math.floor((parseFloat(kg) * 1000) / gramWeight);
+        setQuantity(pieces.toString());
+      }
+    }
+  };
+
+  const handleQuantityChange = (qty: string) => {
+    setQuantity(qty);
+    const product = products.find(p => p.id === parseInt(preformId));
+    if (product && (product as any).gram_weight) {
+      const gramWeight = typeof (product as any).gram_weight === 'string' 
+        ? parseFloat((product as any).gram_weight) 
+        : (product as any).gram_weight;
+      
+      if (gramWeight > 0) {
+        const kg = ((parseFloat(qty) * gramWeight) / 1000).toFixed(2);
+        setWeightKg(kg);
+      }
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -402,19 +435,51 @@ const Production: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="label-caps ml-1">Quantity Produced (PCS)</label>
-                  <div className="relative">
-                    <Factory className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={18} />
-                    <input
-                      required
-                      type="number"
-                      className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white"
-                      placeholder="Enter pieces"
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                    />
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="label-caps ml-1">Quantity Produced (PCS)</label>
+                    <div className="relative">
+                      <Factory className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={18} />
+                      <input
+                        required
+                        type="number"
+                        className="w-full pl-12 pr-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-900 dark:text-white"
+                        placeholder="Enter pieces"
+                        value={quantity}
+                        onChange={(e) => handleQuantityChange(e.target.value)}
+                      />
+                    </div>
                   </div>
+
+                  {preformId && (
+                    <div className="p-4 bg-indigo-50 dark:bg-indigo-500/5 rounded-2xl border border-indigo-100 dark:border-indigo-500/10 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Weight Calculator (KG to PCS)</label>
+                        <AlertCircle size={14} className="text-indigo-400" />
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="flex-1 relative">
+                          <input 
+                            type="number"
+                            step="0.01"
+                            placeholder="Weight in KG"
+                            className="w-full pl-4 pr-10 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
+                            value={weightKg}
+                            onChange={(e) => handleWeightChange(e.target.value)}
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">KG</span>
+                        </div>
+                        <ArrowRight size={16} className="text-slate-300" />
+                        <div className="flex-1 bg-white dark:bg-slate-900 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-900 dark:text-white">
+                          {quantity || 0} PCS
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 italic">
+                        Based on {products.find(p => p.id === parseInt(preformId))?.gram_weight}g grammage
+                      </p>
+                    </div>
+                  )}
+
                   {preformId && (
                     <div className="mt-2 flex items-center gap-2 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
                       <AlertCircle size={12} className="text-indigo-500 dark:text-indigo-400" />

@@ -9,7 +9,8 @@ import {
   ArrowDownRight,
   History,
   AlertCircle,
-  Package
+  Package,
+  ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../utils/cn';
@@ -29,7 +30,8 @@ const StockAdjustment = () => {
     product_id: '',
     type: 'Add',
     quantity: '',
-    reason: 'Opening Stock'
+    reason: 'Opening Stock',
+    weight_kg: ''
   });
 
   const fetchData = async () => {
@@ -61,13 +63,36 @@ const StockAdjustment = () => {
     }
 
     try {
-      await db.stockAdjustments.create(formData, user?.email || 'system');
+      const adjustmentData = {
+        product_id: formData.product_id,
+        type: formData.type,
+        quantity: formData.quantity,
+        reason: formData.reason
+      };
+      await db.stockAdjustments.create(adjustmentData, user?.email || 'system');
       toast.success('Stock adjusted successfully');
       setIsModalOpen(false);
-      setFormData({ product_id: '', type: 'Add', quantity: '', reason: 'Opening Stock' });
+      setFormData({ product_id: '', type: 'Add', quantity: '', reason: 'Opening Stock', weight_kg: '' });
       fetchData();
     } catch (error) {
+      console.error('Adjustment error:', error);
       toast.error('Failed to adjust stock');
+    }
+  };
+
+  const handleWeightChange = (kg: string) => {
+    const product = products.find(p => p.id === parseInt(formData.product_id));
+    if (product && product.gram_weight) {
+      const gramWeight = typeof product.gram_weight === 'string' 
+        ? parseFloat(product.gram_weight) 
+        : product.gram_weight;
+      
+      if (gramWeight > 0) {
+        const pieces = Math.floor((parseFloat(kg) * 1000) / gramWeight);
+        setFormData({ ...formData, weight_kg: kg, quantity: pieces.toString() });
+      }
+    } else {
+      setFormData({ ...formData, weight_kg: kg });
     }
   };
 
@@ -225,7 +250,7 @@ const StockAdjustment = () => {
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="label-caps ml-1">Quantity</label>
+                    <label className="label-caps ml-1">Quantity (PCS)</label>
                     <input 
                       type="number"
                       required 
@@ -236,6 +261,35 @@ const StockAdjustment = () => {
                     />
                   </div>
                 </div>
+
+                {products.find(p => p.id === parseInt(formData.product_id))?.category === 'Preform' && (
+                  <div className="p-4 bg-indigo-50 dark:bg-indigo-500/5 rounded-2xl border border-indigo-100 dark:border-indigo-500/10 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Weight Calculator (KG to PCS)</label>
+                      <AlertCircle size={14} className="text-indigo-400" />
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1 relative">
+                        <input 
+                          type="number"
+                          step="0.01"
+                          placeholder="Weight in KG"
+                          className="w-full pl-4 pr-10 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          value={formData.weight_kg}
+                          onChange={(e) => handleWeightChange(e.target.value)}
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">KG</span>
+                      </div>
+                      <ArrowRight size={16} className="text-slate-300" />
+                      <div className="flex-1 bg-white dark:bg-slate-900 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-900 dark:text-white">
+                        {formData.quantity || 0} PCS
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 italic">
+                      Based on {products.find(p => p.id === parseInt(formData.product_id))?.gram_weight}g grammage
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="label-caps ml-1">Reason / Note</label>
                   <input 

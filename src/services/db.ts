@@ -28,9 +28,9 @@ export const seedDemoData = async () => {
   const products = getLocalStorage('products');
   if (products.length === 0) {
     const demoProducts = [
-      { name: '500ml PET Bottle', category: 'Bottle', gram_weight: '18g', stock: 12500, min_stock_level: 5000, price: 4.50, is_deleted: false },
-      { name: '1L PET Preform', category: 'Preform', gram_weight: '24g', stock: 4200, min_stock_level: 10000, price: 8.20, is_deleted: false },
-      { name: '2L PET Bottle', category: 'Bottle', gram_weight: '32g', stock: 8900, min_stock_level: 5000, price: 12.00, is_deleted: false },
+      { id: 1, name: '500ml PET Bottle', category: 'Bottle', gram_weight: 18, stock: 12500, min_stock_level: 5000, price: 4.50, is_deleted: false },
+      { id: 2, name: '1L PET Preform', category: 'Preform', gram_weight: 24, stock: 4200, min_stock_level: 10000, price: 8.20, is_deleted: false },
+      { id: 3, name: '2L PET Bottle', category: 'Bottle', gram_weight: 32, stock: 8900, min_stock_level: 5000, price: 12.00, is_deleted: false },
     ];
     setLocalStorage('products', demoProducts);
   }
@@ -38,8 +38,8 @@ export const seedDemoData = async () => {
   const suppliers = getLocalStorage('suppliers');
   if (suppliers.length === 0) {
     const demoSuppliers = [
-      { name: 'Global Polymers Ltd', contact_person: 'John Doe', email: 'john@global.com', phone: '9876543210', is_deleted: false },
-      { name: 'Apex Masterbatch', contact_person: 'Jane Smith', email: 'jane@apex.com', phone: '9876543211', is_deleted: false },
+      { id: 1, name: 'Global Polymers Ltd', contact_person: 'John Doe', email: 'john@global.com', phone: '9876543210', is_deleted: false },
+      { id: 2, name: 'Apex Masterbatch', contact_person: 'Jane Smith', email: 'jane@apex.com', phone: '9876543211', is_deleted: false },
     ];
     setLocalStorage('suppliers', demoSuppliers);
   }
@@ -47,8 +47,8 @@ export const seedDemoData = async () => {
   const customers = getLocalStorage('customers');
   if (customers.length === 0) {
     const demoCustomers = [
-      { name: 'Reliance Industries', contact_person: 'Mukesh A.', email: 'mukesh@reliance.com', phone: '9876543212', is_deleted: false },
-      { name: 'Tata Consumer Products', contact_person: 'Ratan T.', email: 'ratan@tata.com', phone: '9876543213', is_deleted: false },
+      { id: 1, name: 'Reliance Industries', contact_person: 'Mukesh A.', email: 'mukesh@reliance.com', phone: '9876543212', is_deleted: false },
+      { id: 2, name: 'Tata Consumer Products', contact_person: 'Ratan T.', email: 'ratan@tata.com', phone: '9876543213', is_deleted: false },
     ];
     setLocalStorage('customers', demoCustomers);
   }

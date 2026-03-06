@@ -43,6 +43,7 @@ interface PurchaseItem {
   product_id: number;
   quantity: number;
   rate: number;
+  weight_kg?: number;
 }
 
 interface Purchase {
@@ -96,11 +97,40 @@ const Purchases: React.FC = () => {
     fetchData();
   }, [token, isDemo]);
 
-  const addItem = () => setItems([...items, { product_id: 0, quantity: 0, rate: 0 }]);
+  const addItem = () => setItems([...items, { product_id: 0, quantity: 0, rate: 0, weight_kg: 0 }]);
   const removeItem = (index: number) => setItems(items.filter((_, i) => i !== index));
   const updateItem = (index: number, field: keyof PurchaseItem, value: number) => {
     const newItems = [...items];
-    newItems[index][field] = value;
+    (newItems[index] as any)[field] = value;
+
+    // Auto-calculate pieces if weight is changed and it's a preform
+    if (field === 'weight_kg') {
+      const product = products.find(p => p.id === newItems[index].product_id);
+      if (product && (product as any).gram_weight) {
+        const gramWeight = typeof (product as any).gram_weight === 'string' 
+          ? parseFloat((product as any).gram_weight) 
+          : (product as any).gram_weight;
+        
+        if (gramWeight > 0) {
+          newItems[index].quantity = Math.floor((value * 1000) / gramWeight);
+        }
+      }
+    }
+    
+    // Auto-calculate weight if quantity is changed and it's a preform
+    if (field === 'quantity') {
+      const product = products.find(p => p.id === newItems[index].product_id);
+      if (product && (product as any).gram_weight) {
+        const gramWeight = typeof (product as any).gram_weight === 'string' 
+          ? parseFloat((product as any).gram_weight) 
+          : (product as any).gram_weight;
+        
+        if (gramWeight > 0) {
+          newItems[index].weight_kg = parseFloat(((value * gramWeight) / 1000).toFixed(2));
+        }
+      }
+    }
+
     setItems(newItems);
   };
 
@@ -419,16 +449,28 @@ const Purchases: React.FC = () => {
                           </select>
                         </div>
                         <div className="col-span-6 md:col-span-2">
-                          <label className="label-caps ml-1 mb-1 block">Quantity</label>
+                          <label className="label-caps ml-1 mb-1 block">Quantity (PCS)</label>
                           <input
                             required
                             type="number"
-                            step="0.01"
                             className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none text-sm transition-all text-slate-900 dark:text-white"
                             value={item.quantity}
                             onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value))}
                           />
                         </div>
+                        {products.find(p => p.id === item.product_id)?.category === 'Preform' && (
+                          <div className="col-span-6 md:col-span-2">
+                            <label className="label-caps ml-1 mb-1 block">Weight (KG)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full px-4 py-2.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-500/5 border border-indigo-100 dark:border-indigo-500/20 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none text-sm transition-all text-slate-900 dark:text-white font-bold"
+                              value={item.weight_kg || ''}
+                              onChange={(e) => updateItem(index, 'weight_kg', parseFloat(e.target.value))}
+                              placeholder="KG"
+                            />
+                          </div>
+                        )}
                         <div className="col-span-6 md:col-span-2">
                           <label className="label-caps ml-1 mb-1 block">Rate (₹)</label>
                           <input
