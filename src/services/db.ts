@@ -53,8 +53,10 @@ export const seedDemoData = async () => {
     setLocalStorage('customers', demoCustomers);
   }
 
-  const users = getLocalStorage('users');
-  if (users.length === 0) {
+  let users = getLocalStorage('users');
+  const adminUser = users.find((u: any) => u.username === 'admin' || u.email === 'admin@example.com');
+  
+  if (!adminUser) {
     const demoUsers = [
       { 
         id: 'super-1', 
@@ -65,7 +67,15 @@ export const seedDemoData = async () => {
         permissions: MODULES.map(m => m.id)
       }
     ];
-    setLocalStorage('users', demoUsers);
+    setLocalStorage('users', [...users, ...demoUsers]);
+  } else if (adminUser.role !== 'superadmin') {
+    // Force existing admin to superadmin if it's not already
+    const updatedUsers = users.map((u: any) => 
+      (u.username === 'admin' || u.email === 'admin@example.com')
+        ? { ...u, role: 'superadmin', permissions: MODULES.map(m => m.id) }
+        : u
+    );
+    setLocalStorage('users', updatedUsers);
   }
 };
 
@@ -1334,3 +1344,4 @@ export const db = {
     }
   }
 };
+

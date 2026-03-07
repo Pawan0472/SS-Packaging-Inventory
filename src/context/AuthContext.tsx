@@ -25,7 +25,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const hasPermission = (moduleName: string) => {
     if (!user) return false;
-    if ((user.role as string) === 'superadmin') return true;
+    const role = (user.role as string).toLowerCase();
+    if (role === 'superadmin') return true;
     const permissions = (user as any).permissions as string[] | undefined;
     if (!permissions) return true; // Default to all if not set (legacy)
     return permissions.includes(moduleName);
@@ -106,6 +107,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = (newToken: string, newUser: User) => {
+    // Force superadmin for default admin credentials in demo mode
+    if (newToken === 'demo-token' && (newUser.username === 'admin' || newUser.email === 'admin@example.com')) {
+      newUser.role = 'superadmin';
+      (newUser as any).permissions = MODULES.map(m => m.id);
+    }
+
     setToken(newToken);
     setUser(newUser);
     setIsDemo(newToken === 'demo-token');
