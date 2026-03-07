@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { User } from '../types';
+import { MODULES } from '../services/db';
 
 interface AuthContextType {
   user: User | null;
@@ -10,6 +11,7 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   isDemo: boolean;
+  hasPermission: (moduleName: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,6 +22,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [isDemo, setIsDemo] = useState(false);
   const navigate = useNavigate();
+
+  const hasPermission = (moduleName: string) => {
+    if (!user) return false;
+    if (user.role === 'superadmin') return true;
+    if (!user.permissions) return true; // Default to all if not set (legacy)
+    return user.permissions.includes(moduleName);
+  };
 
   useEffect(() => {
     const initAuth = async () => {
@@ -37,28 +46,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { supabase, isSupabaseConfigured } = await import('../lib/supabase');
         if (isSupabaseConfigured && supabase) {
           const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            setToken(session.access_token);
-            setUser({
+          
+          const fetchUserProfile = async (session: any) => {
+            if (!session) return null;
+            
+            // Try to fetch from public.users table
+            const { data: profile } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+            
+            const role = profile?.role || (session.user.user_metadata?.role as any);
+            const isInitialAdmin = session.user.email === 'pawan.kuwar.ptcgroup@gmail.com' || session.user.email === 'admin@example.com';
+            
+            return {
               id: session.user.id,
-              username: session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'User',
+              username: profile?.username || session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'User',
               email: session.user.email || '',
-              role: (session.user.user_metadata?.role as any) || 'staff'
-            });
-            setIsDemo(false);
+              role: role || (isInitialAdmin ? 'superadmin' : 'staff'),
+              permissions: profile?.permissions || (isInitialAdmin ? MODULES.map(m => m.id) : [])
+            };
+          };
+
+          if (session) {
+            const userProfile = await fetchUserProfile(session);
+            if (userProfile) {
+              setToken(session.access_token);
+              setUser(userProfile);
+              setIsDemo(false);
+            }
           }
 
           // Listen for auth changes
-          supabase.auth.onAuthStateChange((_event, session) => {
+          supabase.auth.onAuthStateChange(async (_event, session) => {
             if (session) {
-              setToken(session.access_token);
-              setUser({
-                id: session.user.id,
-                username: session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'User',
-                email: session.user.email || '',
-                role: (session.user.user_metadata?.role as any) || 'staff'
-              });
-              setIsDemo(false);
+              const userProfile = await fetchUserProfile(session);
+              if (userProfile) {
+                setToken(session.access_token);
+                setUser(userProfile);
+                setIsDemo(false);
+              }
             } else {
               setToken(null);
               setUser(null);
@@ -95,7 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading, isDemo }}>
+    <AuthContext.Provider value={{ user, token, login, logout, isLoading, isDemo, hasPermission }}>
       {children}
     </AuthContext.Provider>
   );

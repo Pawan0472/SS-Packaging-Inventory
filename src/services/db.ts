@@ -52,7 +52,36 @@ export const seedDemoData = async () => {
     ];
     setLocalStorage('customers', demoCustomers);
   }
+
+  const users = getLocalStorage('users');
+  if (users.length === 0) {
+    const demoUsers = [
+      { 
+        id: 'super-1', 
+        username: 'admin', 
+        email: 'admin@example.com', 
+        password: 'admin123', 
+        role: 'superadmin',
+        permissions: MODULES.map(m => m.id)
+      }
+    ];
+    setLocalStorage('users', demoUsers);
+  }
 };
+
+export const MODULES = [
+  { id: 'dashboard', name: 'Dashboard' },
+  { id: 'products', name: 'Products' },
+  { id: 'stock-adjustment', name: 'Stock Adjustment' },
+  { id: 'purchases', name: 'Purchases' },
+  { id: 'production', name: 'Production' },
+  { id: 'sales', name: 'Sales' },
+  { id: 'customers', name: 'Customers' },
+  { id: 'suppliers', name: 'Suppliers' },
+  { id: 'crm', name: 'CRM' },
+  { id: 'reports', name: 'Reports' },
+  { id: 'audit-logs', name: 'Audit Logs' },
+];
 
 let demoMode = false;
 export const setDemoMode = (val: boolean) => { demoMode = val; };
@@ -911,38 +940,44 @@ export const db = {
       );
     },
     async create(adjustment: any, userEmail: string) {
-      const { product_id, type, quantity, reason } = adjustment;
+      const { product_id, type, quantity, reason, weight_kg } = adjustment;
       const pid = parseInt(product_id);
       const qty = parseInt(quantity);
       const amount = type === 'Add' ? qty : -qty;
 
       let result;
       if (isSupabaseConfigured && !demoMode) {
-        const { data, error } = await supabase!.from('stock_adjustments').insert([{
-          product_id: pid,
-          type,
-          quantity: qty,
-          reason,
-          user_email: userEmail
-        }]).select();
-        
-        if (error) throw error;
-        result = data[0];
+        try {
+          const { data, error } = await supabase!.from('stock_adjustments').insert([{
+            product_id: pid,
+            type,
+            quantity: qty,
+            reason,
+            weight_kg: weight_kg ? parseFloat(weight_kg) : null,
+            user_email: userEmail
+          }]).select();
+          
+          if (error) throw error;
+          result = data[0];
 
-        // Update product stock using RPC for atomicity with manual fallback
-        const { error: rpcError } = amount > 0 
-          ? await supabase!.rpc('increment_stock', { product_id: pid, amount })
-          : await supabase!.rpc('decrement_stock', { product_id: pid, amount: Math.abs(amount) });
+          // Update product stock using RPC for atomicity with manual fallback
+          const { error: rpcError } = amount > 0 
+            ? await supabase!.rpc('increment_stock', { product_id: pid, amount })
+            : await supabase!.rpc('decrement_stock', { product_id: pid, amount: Math.abs(amount) });
 
-        if (rpcError) {
-          console.warn('RPC stock update failed, trying manual update', rpcError);
-          const { data: p } = await supabase!.from('products').select('stock').eq('id', pid).single();
-          if (p) {
-            await supabase!.from('products').update({ stock: (p.stock || 0) + amount }).eq('id', pid);
+          if (rpcError) {
+            console.warn('RPC stock update failed, trying manual update', rpcError);
+            const { data: p } = await supabase!.from('products').select('stock').eq('id', pid).single();
+            if (p) {
+              await supabase!.from('products').update({ stock: (p.stock || 0) + amount }).eq('id', pid);
+            }
           }
+          
+          await logAction(userEmail, 'CREATE', 'stock_adjustments', result.id.toString());
+        } catch (e) {
+          console.error('Supabase stock adjustment failed, falling back to local', e);
+          result = { ...adjustment, id: Date.now(), created_at: new Date().toISOString(), user_email: userEmail };
         }
-        
-        await logAction(userEmail, 'CREATE', 'stock_adjustments', result.id.toString());
       } else {
         result = { ...adjustment, id: Date.now(), created_at: new Date().toISOString(), user_email: userEmail };
       }
@@ -960,6 +995,83 @@ export const db = {
       }
       
       return result;
+    }
+  },
+  users: {
+    async getAll() {
+      return safeCall(
+        async () => await supabase!.from('users').select('*').order('username'),
+        'users'
+      );
+    },
+    async create(user: any) {
+      if (isSupabaseConfigured && !demoMode) {
+        try {
+          const response = await fetch('/api/admin/create-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(user)
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || 'Failed to create user');
+          return data.user;
+        } catch (e: any) {
+          console.error('Supabase admin create failed, falling back to local', e);
+          // Fallback to local if API fails (e.g. service key not set)
+          const result = { ...user, id: Date.now().toString(), created_at: new Date().toISOString() };
+          const users = getLocalStorage('users');
+          users.push(result);
+          setLocalStorage('users', users);
+          return result;
+        }
+      }
+
+      const result = { ...user, id: Date.now().toString(), created_at: new Date().toISOString() };
+      const users = getLocalStorage('users');
+      users.push(result);
+      setLocalStorage('users', users);
+      return result;
+    },
+    async update(id: string, updates: any) {
+      let result;
+      if (isSupabaseConfigured && !demoMode) {
+        const { data, error } = await supabase!.from('users').update(updates).eq('id', id).select();
+        if (error) throw error;
+        result = data[0];
+      } else {
+        const users = getLocalStorage('users');
+        const index = users.findIndex((u: any) => u.id === id);
+        if (index !== -1) {
+          users[index] = { ...users[index], ...updates };
+          result = users[index];
+          setLocalStorage('users', users);
+        }
+      }
+      return result;
+    },
+    async delete(id: string) {
+      if (isSupabaseConfigured && !demoMode) {
+        try {
+          const response = await fetch(`/api/admin/delete-user/${id}`, {
+            method: 'DELETE'
+          });
+          if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Failed to delete user');
+          }
+        } catch (e) {
+          console.error('Supabase admin delete failed, falling back to local', e);
+          // Just delete from local if API fails
+        }
+      }
+      const users = getLocalStorage('users');
+      const filtered = users.filter((u: any) => u.id !== id);
+      setLocalStorage('users', filtered);
+      return true;
+    },
+    async findByEmail(email: string) {
+      const users = await this.getAll();
+      return users.find((u: any) => u.email === email);
     }
   },
   dashboard: {
@@ -1222,4 +1334,3 @@ export const db = {
     }
   }
 };
-

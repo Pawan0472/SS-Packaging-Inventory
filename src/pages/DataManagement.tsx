@@ -291,6 +291,68 @@ const DataManagement: React.FC = () => {
         </div>
       </div>
 
+      {/* Database Setup Section */}
+      <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="flex items-center gap-4 mb-8">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+            <ShieldCheck size={24} />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Supabase Setup Guide</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider mt-0.5">Required SQL for User Management</p>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700">
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+              To enable the User Management module with Supabase, run the following SQL in your Supabase SQL Editor:
+            </p>
+            <pre className="bg-slate-900 text-indigo-300 p-6 rounded-2xl text-xs overflow-x-auto font-mono leading-relaxed">
+{`-- Create users table in public schema
+CREATE TABLE IF NOT EXISTS public.users (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  username TEXT NOT NULL,
+  email TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'staff',
+  permissions TEXT[] DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+
+-- Create policies
+CREATE POLICY "Users can view their own profile" 
+  ON public.users FOR SELECT 
+  USING (auth.uid() = id);
+
+CREATE POLICY "Superadmins can manage all users" 
+  ON public.users FOR ALL 
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.users 
+      WHERE id = auth.uid() AND role = 'superadmin'
+    )
+  );`}
+            </pre>
+          </div>
+          
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1 p-6 rounded-3xl bg-amber-50/50 dark:bg-amber-500/5 border border-amber-100 dark:border-amber-500/20">
+              <div className="flex items-center gap-2 mb-2 text-amber-700 dark:text-amber-400">
+                <AlertCircle size={16} />
+                <span className="text-xs font-bold uppercase tracking-wider">Important Note</span>
+              </div>
+              <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 leading-relaxed">
+                After running the SQL, make sure to add your <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded">SUPABASE_SERVICE_ROLE_KEY</code> to the environment variables to allow the admin panel to create Auth users.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* System Health Section */}
       <div className="bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="flex items-center justify-between mb-8">
