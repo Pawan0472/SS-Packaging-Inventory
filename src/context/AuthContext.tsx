@@ -25,9 +25,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const hasPermission = (moduleName: string) => {
     if (!user) return false;
-    if (user.role === 'superadmin') return true;
-    if (!user.permissions) return true; // Default to all if not set (legacy)
-    return user.permissions.includes(moduleName);
+    if ((user.role as string) === 'superadmin') return true;
+    const permissions = (user as any).permissions as string[] | undefined;
+    if (!permissions) return true; // Default to all if not set (legacy)
+    return permissions.includes(moduleName);
   };
 
   useEffect(() => {

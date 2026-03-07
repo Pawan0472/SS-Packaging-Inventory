@@ -118,7 +118,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   ].map(section => ({
     ...section,
     items: section.items.filter(item => {
-      if (item.id === 'superadmin') return user?.role === 'superadmin';
+      if (item.id === 'superadmin') return (user?.role as string) === 'superadmin';
       return hasPermission(item.id);
     })
   })).filter(section => section.items.length > 0);

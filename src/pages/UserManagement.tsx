@@ -65,8 +65,8 @@ const UserManagement: React.FC = () => {
         username: user.username,
         email: user.email,
         password: '', // Don't show password for editing
-        role: user.role,
-        permissions: user.permissions || []
+        role: user.role as UserRole,
+        permissions: (user as any).permissions || []
       });
     } else {
       setEditingUser(null);
@@ -211,30 +211,30 @@ const UserManagement: React.FC = () => {
                         </div>
                       </div>
                     </td>
-                    <td>
+                    <td className="py-4 px-6">
                       <span className={cn(
                         "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
-                        u.role === 'superadmin' ? "bg-purple-100 text-purple-700 dark:bg-purple-500/10 dark:text-purple-400" :
-                        u.role === 'admin' ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400" :
-                        u.role === 'manager' ? "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400" :
+                        (u.role as string) === 'superadmin' ? "bg-purple-100 text-purple-700 dark:bg-purple-500/10 dark:text-purple-400" :
+                        (u.role as string) === 'admin' ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400" :
+                        (u.role as string) === 'manager' ? "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400" :
                         "bg-slate-100 text-slate-700 dark:bg-slate-500/10 dark:text-slate-400"
                       )}>
                         {u.role}
                       </span>
                     </td>
-                    <td>
+                    <td className="py-4 px-6">
                       <div className="flex flex-wrap gap-1 max-w-xs">
-                        {u.role === 'superadmin' ? (
+                        {(u.role as string) === 'superadmin' ? (
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Full Access</span>
                         ) : (
-                          u.permissions?.slice(0, 3).map(p => (
+                          ((u as any).permissions as string[] | undefined)?.slice(0, 3).map(p => (
                             <span key={p} className="px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-800 text-[9px] font-bold text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-700">
                               {p}
                             </span>
                           ))
                         )}
-                        {u.role !== 'superadmin' && (u.permissions?.length || 0) > 3 && (
-                          <span className="text-[9px] font-bold text-slate-400">+{u.permissions!.length - 3} more</span>
+                        {(u.role as string) !== 'superadmin' && (((u as any).permissions as string[] | undefined)?.length || 0) > 3 && (
+                          <span className="text-[9px] font-bold text-slate-400">+{((u as any).permissions as string[]).length - 3} more</span>
                         )}
                       </div>
                     </td>
@@ -366,7 +366,7 @@ const UserManagement: React.FC = () => {
                   </div>
                 </div>
 
-                {formData.role !== 'superadmin' && (
+                {formData.role !== ('superadmin' as any) && (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">Module Permissions</h4>
@@ -414,7 +414,7 @@ const UserManagement: React.FC = () => {
                   </div>
                 )}
 
-                {formData.role === 'superadmin' && (
+                {formData.role === ('superadmin' as any) && (
                   <div className="p-6 bg-purple-50 dark:bg-purple-500/5 rounded-2xl border border-purple-100 dark:border-purple-500/20 flex items-center gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center text-purple-600 dark:text-purple-400">
                       <Shield size={24} />

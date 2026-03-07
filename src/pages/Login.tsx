@@ -181,7 +181,7 @@ const Login: React.FC = () => {
             <div>
               <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-1">Demo Access</p>
               <p className="text-xs text-indigo-700 leading-relaxed">
-                Use <span className="font-bold">admin</span> / <span className="font-bold">admin123</span> to explore the interface immediately.
+                Use <span className="font-bold">guest.47</span> / <span className="font-bold">guest.47</span> to explore the interface immediately.
               </p>
             </div>
           </div>
